@@ -139,11 +139,14 @@ export async function GET(request, { params }) {
 
     connection = await backfillCursorIdentity(connection);
 
-    // Allow OAuth connections, plus whitelisted apikey providers (glm/minimax/...)
+    // Allow OAuth connections, plus whitelisted apikey providers (glm/minimax/kiro/...)
+    // Kiro's headless api-key flow persists authType "api_key" (underscore) while
+    // generic apikey providers persist "apikey" — accept both spellings here.
     const isOAuth = connection.authType === "oauth";
+    const isApikeyAuth =
+      connection.authType === "apikey" || connection.authType === "api_key";
     const isApikeyEligible =
-      connection.authType === "apikey" &&
-      USAGE_APIKEY_PROVIDERS.includes(connection.provider);
+      isApikeyAuth && USAGE_APIKEY_PROVIDERS.includes(connection.provider);
 
     if (!isOAuth && !isApikeyEligible) {
       return Response.json({ message: "Usage not available for this connection" });
