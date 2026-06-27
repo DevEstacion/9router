@@ -10,6 +10,7 @@ import { getCodexUsage, consumeCodexRateLimitResetCredit } from "./usage/codex.j
 export { consumeCodexRateLimitResetCredit };
 import { getKiroUsage } from "./usage/kiro.js";
 import { getMiniMaxUsage } from "./usage/minimax.js";
+import { getCodeBuddyCnUsage } from "./usage/codebuddy-cn.js";
 import {
   getQwenUsage,
   getIflowUsage,
@@ -43,6 +44,7 @@ const USAGE_HANDLERS = {
   "vercel-ai-gateway": (c) => getVercelAiGatewayUsage(c.apiKey, c.proxyOptions),
   // xAI has no public quota API. Aggregate from local usageHistory instead.
   xai: (c) => getXaiLocalUsage(c.provider, c.connectionId, "xAI / Grok Build"),
+  "codebuddy-cn": (c) => getCodeBuddyCnUsage(c.accessToken, c.apiKey, c.providerSpecificData, c.proxyOptions),
 };
 
 export async function getUsageForProvider(connection, proxyOptions = null) {
