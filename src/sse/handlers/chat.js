@@ -48,16 +48,21 @@ export async function handleChat(request, clientRawRequest = null) {
   }
   cacheClaudeHeaders(clientRawRequest.headers);
 
-  let modelStr = body.model;
-  const compatMode = (await getSettings()).claudeClassifierCompat || "off";
-  const systemTexts = Array.isArray(body.system)
-    ? body.system.map((part) => (typeof part?.text === "string" ? part.text : "")).filter(Boolean)
-    : [];
-  const looksLikeClassifier = systemTexts.some((text) => text.includes("You are a security monitor for autonomous AI coding agents"))
-    || (Array.isArray(body.stop_sequences) && body.stop_sequences.includes("</block>"));
-  if (compatMode !== "off" && looksLikeClassifier) modelStr = "cx/gpt-5.4-high";
+<<<<<<< HEAD
+  const modelStr = body.model;
 
   // Request summary is emitted as the unified "▶" line in chatCore (has fmt/thinking/account)
+=======
+  // Log request endpoint and model
+  const url = new URL(request.url);
+  const modelStr = body.model;
+
+  // Count messages (support both messages[] and input[] formats)
+  const msgCount = body.messages?.length || body.input?.length || 0;
+  const toolCount = body.tools?.length || 0;
+  const effort = body.reasoning_effort || body.reasoning?.effort || null;
+  log.request("POST", `${url.pathname} | ${modelStr} | ${msgCount} msgs${toolCount ? ` | ${toolCount} tools` : ""}${effort ? ` | effort=${effort}` : ""}`);
+>>>>>>> e214fc2 (revert(claude-compat): do not override the user-chosen auto combo model)
 
   // Log API key (masked)
   const authHeader = request.headers.get("Authorization");

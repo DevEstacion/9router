@@ -1,49 +1,31 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 /**
- * The classifier-routing override lives in `src/sse/handlers/chat.js`. It
- * inspects the raw body and pins the model to `cx/gpt-5.4-high` when
- * `claudeClassifierCompat !== "off"` and the request looks like a Claude
- * auto-mode classifier. We cannot easily import the route handler (it
- * pulls in Next.js + auth), so we re-read the source file and assert the
- * override logic is present and syntactically wired to the right
- * detectors. This guards against a future refactor that silently drops
- * the classifier-routing override.
+ * The Claude auto-mode classifier compat toggle controls how 9router
+ * TRANSLATES the response from the upstream combo. It must NOT
+ * override the model chosen by the user's combo (auto-xhigh,
+ * auto-high, auto-medium) — those combos are the user's chosen way to
+ * reach a Claude-class upstream and expanding them is handled by
+ * `getComboModels`. Re-introducing a hard-coded model override would
+ * force-route every classifier through one model, which is the wrong
+ * default for users on different combos.
  */
-describe("chat.js classifier-routing override", () => {
+describe("chat.js does not override the user-chosen auto combo model", () => {
   const src = readFileSync(
     join(process.cwd(), "..", "src/sse/handlers/chat.js"),
     "utf8",
   );
 
-  it("contains the classifier detector constants", () => {
-    expect(src).toMatch(/You are a security monitor for autonomous AI coding agents/);
-    expect(src).toMatch(/<\/block>/);
+  it("keeps modelStr as the original body.model field", () => {
+    const assignment = src.match(/const modelStr = body\.model;/);
+    expect(assignment).toBeTruthy();
   });
 
-  it("pins the model to cx/gpt-5.4-high when classifier + compat is on", () => {
-    expect(src).toMatch(/cx\/gpt-5\.4-high/);
-  });
-
-  it("threads the compat mode and detection together before model override", () => {
-    // The check must come BEFORE the model reassignment, otherwise the
-    // override fires on every request including non-classifier ones.
-    const compatIndex = src.indexOf("claudeClassifierCompat");
-    const detectionIndex = src.indexOf("security monitor");
-    const overrideIndex = src.indexOf("modelStr = \"cx/gpt-5.4-high\"");
-    expect(compatIndex).toBeGreaterThan(-1);
-    expect(detectionIndex).toBeGreaterThan(-1);
-    expect(overrideIndex).toBeGreaterThan(-1);
-    expect(compatIndex).toBeLessThan(detectionIndex);
-    expect(detectionIndex).toBeLessThan(overrideIndex);
-  });
-
-  it("gates the override on the compat mode being non-off", () => {
-    // The override must NOT fire for users who have compat off.
-    const overrideBlock = src.match(/compatMode !== "off"[\s\S]{0,500}/);
-    expect(overrideBlock).toBeTruthy();
-    expect(overrideBlock?.[0]).toMatch(/looksLikeClassifier/);
+  it("does not hard-code a specific model for classifier routing", () => {
+    expect(src).not.toMatch(/modelStr\s*=\s*["']cx\/gpt-5\.4["']/);
+    expect(src).not.toMatch(/modelStr\s*=\s*["']cx\/gpt-5\.4-high["']/);
+    expect(src).not.toMatch(/modelStr\s*=\s*["']cc\/claude/);
   });
 });
