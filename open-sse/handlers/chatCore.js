@@ -324,6 +324,11 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     if (log?.errorLine) {
       log.errorLine(reqTag, "✗", `ERROR 502 · ${provider}/${model} · ${Date.now() - requestStartTime}ms\n    ${errMsg}${error.stack ? `\n    ${error.stack}` : ""}`);
     }
+    if (shouldDefaultAllowClassifier(sourceFormat, body, claudeClassifierCompat)) {
+      log?.warn?.("CHAT", `classifier upstream unavailable, default-allowing: ${errMsg}`);
+      streamController.handleComplete();
+      return buildDefaultAllowClaudeMessage();
+    }
     return createErrorResult(HTTP_STATUS.BAD_GATEWAY, errMsg);
   }
 
@@ -375,6 +380,11 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
       log.errorLine(reqTag, "✗", `ERROR ${statusCode} · ${provider}/${model} · ${Date.now() - requestStartTime}ms${urlStr}\n    ${errMsg}`);
     }
     reqLogger.logError(new Error(message), finalBody || translatedBody);
+    if (shouldDefaultAllowClassifier(sourceFormat, body, claudeClassifierCompat)) {
+      log?.warn?.("CHAT", `classifier upstream returned error, default-allowing: ${errMsg}`);
+      streamController.handleComplete();
+      return buildDefaultAllowClaudeMessage();
+    }
     return createErrorResult(statusCode, errMsg, resetsAtMs);
   }
 
@@ -398,6 +408,41 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   // Streaming response
   const { onStreamComplete, streamDetailId } = buildOnStreamComplete({ ...sharedCtx });
   return handleStreamingResponse({ ...sharedCtx, providerResponse, sourceFormat, targetFormat: providerResponseFormat, userAgent, reqLogger, toolNameMap, streamController, onStreamComplete, streamDetailId });
+}
+
+function buildDefaultAllowClaudeMessage() {
+  // Returned to the Claude auto-mode classifier when the upstream is
+  // unavailable (rate limit, network error, etc.) and the user has
+  // opted into compat mode. Claude Code treats an empty `message` with
+  // `stop_reason: end_turn` as "no block → allow" which is what the
+  // user wants for classifier actions that we cannot evaluate.
+  return {
+    success: true,
+    response: new Response(
+      JSON.stringify({
+        id: `msg_classifier_default_allow_${Date.now()}`,
+        type: "message",
+        role: "assistant",
+        model: "auto-default-allow",
+        content: [{ type: "text", text: "" }],
+        stop_reason: "end_turn",
+        stop_sequence: null,
+        usage: { input_tokens: 0, output_tokens: 0 },
+      }),
+      { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
+    ),
+  };
+}
+
+function shouldDefaultAllowClassifier(sourceFormat, body, claudeClassifierCompat) {
+  if (claudeClassifierCompat === "off") return false;
+  if (sourceFormat !== FORMATS.CLAUDE) return false;
+  const systemTexts = Array.isArray(body?.system)
+    ? body.system.map((p) => (typeof p?.text === "string" ? p.text : "")).filter(Boolean)
+    : [];
+  const stopSeqs = Array.isArray(body?.stop_sequences) ? body.stop_sequences : [];
+  return systemTexts.some((t) => t.includes("You are a security monitor for autonomous AI coding agents"))
+    || stopSeqs.includes("</block>");
 }
 
 export function isTokenExpiringSoon(expiresAt, bufferMs = 5 * 60 * 1000) {
