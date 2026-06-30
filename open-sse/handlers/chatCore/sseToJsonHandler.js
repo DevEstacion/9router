@@ -78,6 +78,10 @@ function buildClaudeMessageFromOpenAICompletion(responseBody, { model, claudeCom
   }
   if (content.length === 0) content.push({ type: "text", text: "" });
   const usage = responseBody.usage || {};
+  const claudeUsage = { input_tokens: usage.prompt_tokens || usage.input_tokens || 0, output_tokens: usage.completion_tokens || usage.output_tokens || 0 };
+  if (usage.prompt_tokens_details && typeof usage.prompt_tokens_details.cached_tokens === "number") {
+    claudeUsage.cache_read_input_tokens = usage.prompt_tokens_details.cached_tokens;
+  }
   return {
     id: String(responseBody.id || `msg_${Date.now()}`).replace(/^chatcmpl-/, ""),
     type: "message",
@@ -86,11 +90,22 @@ function buildClaudeMessageFromOpenAICompletion(responseBody, { model, claudeCom
     content,
     stop_reason: fromOpenAIFinish(choice.finish_reason, FORMATS.CLAUDE),
     stop_sequence: null,
-    usage: {
-      input_tokens: usage.prompt_tokens || usage.input_tokens || 0,
-      output_tokens: usage.completion_tokens || usage.output_tokens || 0,
-    },
+    usage: claudeUsage,
   };
+}
+
+function buildClaudeUsage(jsonResponse) {
+  const u = (jsonResponse && jsonResponse.usage) || {};
+  const out = { input_tokens: u.input_tokens || 0, output_tokens: u.output_tokens || 0 };
+  if (u.cache_read_input_tokens || u.cache_creation_input_tokens) {
+    if (u.cache_read_input_tokens) out.cache_read_input_tokens = u.cache_read_input_tokens;
+    if (u.cache_creation_input_tokens) out.cache_creation_input_tokens = u.cache_creation_input_tokens;
+  }
+  const details = u.input_tokens_details || u.prompt_tokens_details;
+  if (details && typeof details.cached_tokens === "number") {
+    out.cache_read_input_tokens = details.cached_tokens;
+  }
+  return out;
 }
 
 function buildClaudeMessageResponse({ jsonResponse, textContent, toolCalls, inTokens, outTokens, model, claudeCompat }) {
@@ -130,7 +145,7 @@ function buildClaudeMessageResponse({ jsonResponse, textContent, toolCalls, inTo
     content,
     stop_reason: fromOpenAIFinish(jsonResponse.status === "completed" || jsonResponse.status === "done" ? "stop" : (toolCalls.length > 0 ? "tool_calls" : (jsonResponse.status || "stop")), FORMATS.CLAUDE),
     stop_sequence: null,
-    usage: { input_tokens: inTokens, output_tokens: outTokens },
+    usage: buildClaudeUsage(jsonResponse),
   };
 }
 
