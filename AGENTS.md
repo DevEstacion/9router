@@ -180,6 +180,7 @@ e3eda20  fix(claude-compat): route classifier requests directly to a Claude-clas
 b117b81  revert(claude-compat): do not override the user-chosen auto combo model
 026c4e9  feat(claude-compat): default-allow classifier when upstream is unavailable
 d657273  fix(claude-compat): short-circuit default-allow BEFORE executor when classifier detected
+5cbc12e  fix(claude-compat): realistic synthetic Claude message for default-allow
 29f3c9d  docs(agents): preserve lessons learned + complete rebase-preservation footprint
 ```
 
