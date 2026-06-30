@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Card, Button, Input, Modal, Toggle, ConfirmModal } from "@/shared/components";
+import { Card, Button, Input, Modal, Toggle, ConfirmModal, SegmentedControl } from "@/shared/components";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 import { getCurrentLocale, onLocaleChange } from "@/i18n/runtime";
 import {
@@ -9,6 +9,12 @@ import {
   CAVEMAN_LEVELS,
   PONYTAIL_LEVELS,
 } from "../endpoint/endpointConstants";
+
+const CLAUDE_CLASSIFIER_COMPAT_OPTIONS = [
+  { value: "off", label: "Off", desc: "Leave Claude classifier handling unchanged." },
+  { value: "auto", label: "Auto", desc: "Apply Claude-only compatibility when classifier traffic is detected." },
+  { value: "always", label: "Always", desc: "Always force Claude classifier compatibility handling." },
+];
 
 export default function TokenSaverClient() {
   const [rtkEnabled, setRtkEnabledState] = useState(true);
@@ -57,6 +63,7 @@ export default function TokenSaverClient() {
   const [showPxpipeModal, setShowPxpipeModal] = useState(false);
   const [pxpipeActionLoading, setPxpipeActionLoading] = useState(false);
   const [pxpipeActionError, setPxpipeActionError] = useState("");
+  const [claudeClassifierCompat, setClaudeClassifierCompat] = useState("off");
   const [locale, setLocale] = useState("en");
 
   const { copied, copy } = useCopyToClipboard();
@@ -406,6 +413,11 @@ export default function TokenSaverClient() {
     patchSetting({ pxpipeMinChars: next });
   };
 
+  const handleClaudeClassifierCompat = (mode) => {
+    setClaudeClassifierCompat(mode);
+    patchSetting({ claudeClassifierCompat: mode });
+  };
+
   useEffect(() => {
     const loadSettings = async () => {
       try {
@@ -423,6 +435,7 @@ export default function TokenSaverClient() {
           setPonytailLevel(data.ponytailLevel || "full");
           setPxpipeEnabled(!!data.pxpipeEnabled);
           if (typeof data.pxpipeMinChars === "number") setPxpipeMinChars(data.pxpipeMinChars);
+          setClaudeClassifierCompat(data.claudeClassifierCompat || "off");
           refreshHeadroomStatus();
           // PRD: run the PXPIPE health check automatically when the page opens
           refreshPxpipeStatus().then(runPxpipeHealth);
@@ -731,6 +744,26 @@ export default function TokenSaverClient() {
               checked={ponytailEnabled}
               onChange={() => handlePonytailEnabled(!ponytailEnabled)}
             />
+          </div>
+        </div>
+        <div className="flex items-center justify-between pt-4 mt-4 border-t border-border gap-4 flex-wrap">
+          <div className="min-w-0 flex-1">
+            <p className="font-medium">Claude classifier compatibility</p>
+            <p className="text-sm text-text-muted">
+              Keep Claude classifier requests compatible with Off, Auto, or Always handling.
+            </p>
+          </div>
+          <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:min-w-[320px] sm:items-end">
+            <SegmentedControl
+              options={CLAUDE_CLASSIFIER_COMPAT_OPTIONS.map(({ value, label }) => ({ value, label }))}
+              value={claudeClassifierCompat}
+              onChange={handleClaudeClassifierCompat}
+              size="sm"
+              className="w-full sm:w-auto"
+            />
+            <p className="text-xs text-primary sm:text-right">
+              {CLAUDE_CLASSIFIER_COMPAT_OPTIONS.find((option) => option.value === claudeClassifierCompat)?.desc}
+            </p>
           </div>
         </div>
         {/* PXPIPE hidden from UI — experimental, not exposed to users yet */}

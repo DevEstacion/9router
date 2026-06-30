@@ -20,14 +20,14 @@ function parseToolArguments(value) {
   }
 }
 
-function openAICompletionToClaudeMessage(responseBody) {
+function openAICompletionToClaudeMessage(responseBody, options = {}) {
   if (!responseBody?.choices?.[0]) return responseBody;
   const choice = responseBody.choices[0];
   const message = choice.message || {};
   const content = [];
 
   const reasoning = message.reasoning_content || message.provider_specific_fields?.reasoning_content || "";
-  if (reasoning) {
+  if (reasoning && !options.claudeCompat) {
     content.push({ type: "thinking", thinking: reasoning });
   }
   if (typeof message.content === "string" && message.content.length > 0) {
@@ -63,10 +63,10 @@ function openAICompletionToClaudeMessage(responseBody) {
 /**
  * Translate non-streaming response body from provider format → OpenAI format.
  */
-export function translateNonStreamingResponse(responseBody, targetFormat, sourceFormat) {
+export function translateNonStreamingResponse(responseBody, targetFormat, sourceFormat, options = {}) {
   if (targetFormat === sourceFormat) return responseBody;
   if (targetFormat === FORMATS.OPENAI && sourceFormat === FORMATS.CLAUDE) {
-    return openAICompletionToClaudeMessage(responseBody);
+    return openAICompletionToClaudeMessage(responseBody, options);
   }
   if (targetFormat === FORMATS.OPENAI) return responseBody;
 
