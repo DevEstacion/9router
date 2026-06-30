@@ -48,7 +48,14 @@ export async function handleChat(request, clientRawRequest = null) {
   }
   cacheClaudeHeaders(clientRawRequest.headers);
 
-  const modelStr = body.model;
+  let modelStr = body.model;
+  const compatMode = (await getSettings()).claudeClassifierCompat || "off";
+  const systemTexts = Array.isArray(body.system)
+    ? body.system.map((part) => (typeof part?.text === "string" ? part.text : "")).filter(Boolean)
+    : [];
+  const looksLikeClassifier = systemTexts.some((text) => text.includes("You are a security monitor for autonomous AI coding agents"))
+    || (Array.isArray(body.stop_sequences) && body.stop_sequences.includes("</block>"));
+  if (compatMode !== "off" && looksLikeClassifier) modelStr = "cx/gpt-5.4-high";
 
   // Request summary is emitted as the unified "▶" line in chatCore (has fmt/thinking/account)
 
