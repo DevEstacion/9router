@@ -240,6 +240,12 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
 
   if (xf.length && log?.line) log.line(reqTag, "⚙", xf.join(" · "));
 
+  if (shouldDefaultAllowClassifier(sourceFormat, body, claudeClassifierCompat)) {
+    log?.warn?.("CHAT", `classifier compat=${claudeClassifierCompat} | short-circuit default-allow (no upstream call)`);
+    appendRequestLog({ model, provider, connectionId, status: "ALLOWED (compat short-circuit)" }).catch(() => { });
+    return buildDefaultAllowClaudeMessage();
+  }
+
   const executor = getExecutor(provider);
   trackPendingRequest(model, provider, connectionId, true);
   appendRequestLog({ model, provider, connectionId, status: "PENDING" }).catch(() => { });

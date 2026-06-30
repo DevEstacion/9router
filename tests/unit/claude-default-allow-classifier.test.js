@@ -26,6 +26,8 @@ vi.mock("../../open-sse/utils/requestLogger.js", () => ({
 vi.mock("../../open-sse/utils/stream.js", () => ({
   COLORS: { red: "", reset: "" },
   createPassthroughStreamWithLogger: vi.fn(() => new TransformStream()),
+  createSSETransformStreamWithLogger: vi.fn(() => new TransformStream()),
+  buildTransformStream: vi.fn(() => new TransformStream()),
 }));
 
 vi.mock("@/lib/usageDb.js", () => ({
@@ -115,5 +117,62 @@ describe("handleChatCore Claude classifier compat default-allow on upstream fail
     // OpenAI client should see the upstream error, not a fake "allow" message
     expect(result.success).toBe(false);
     expect(result.status).toBe(502);
+  });
+
+  it("short-circuits to default-allow when upstream returns 200 OK with empty content and compat is on (regression for MiniMax-M3 empty chat.completion)", async () => {
+    const emptyResponseBody = JSON.stringify({
+      id: "chatcmpl-1782801731648",
+      object: "chat.completion",
+      created: 1782801731,
+      model: "MiniMax-M3",
+      choices: [{ index: 0, message: { role: "assistant", content: "" }, finish_reason: "stop" }],
+    });
+    executeMock.mockResolvedValue({
+      response: new Response(emptyResponseBody, { status: 200, headers: { "content-type": "application/json" } }),
+      url: "https://example.com/v1/chat/completions",
+      headers: {},
+      transformedBody: null,
+    });
+    const result = await handleChatCore(makeContext());
+    expect(result.success).toBe(true);
+    const payload = await result.response.json();
+    expect(payload.type).toBe("message");
+    expect(payload.stop_reason).toBe("end_turn");
+    expect(payload.content.some((b) => b.type === "text" && b.text === "")).toBe(true);
+    expect(executeMock).not.toHaveBeenCalled();
+  });
+
+  it("does NOT short-circuit when the request body lacks the classifier marker (regular Claude request with compat=always)", async () => {
+    const nonClassifierBody = {
+      model: "auto-xhigh",
+      stream: false,
+      system: [{ type: "text", text: "You are a helpful coding assistant." }],
+      stop_sequences: [],
+      messages: [{ role: "user", content: [{ type: "text", text: "hello" }] }],
+      max_tokens: 1024,
+    };
+    const upstreamBody = JSON.stringify({
+      id: "msg_real_response",
+      type: "message",
+      role: "assistant",
+      model: "claude-3-5-sonnet",
+      content: [{ type: "text", text: "hi there" }],
+      stop_reason: "end_turn",
+      stop_sequence: null,
+      usage: { input_tokens: 10, output_tokens: 5 },
+    });
+    executeMock.mockResolvedValue({
+      response: new Response(upstreamBody, { status: 200, headers: { "content-type": "application/json" } }),
+      url: "https://example.com/v1/messages",
+      headers: {},
+      transformedBody: null,
+    });
+    const result = await handleChatCore(makeContext({ body: nonClassifierBody }));
+    expect(executeMock).toHaveBeenCalled();
+    expect(result.success).toBe(true);
+    const payload = await result.response.json();
+    expect(payload.type).toBe("message");
+    expect(payload.model).toBe("claude-3-5-sonnet");
+    expect(payload.content[0].text).toBe("hi there");
   });
 });

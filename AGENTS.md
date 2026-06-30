@@ -10,7 +10,7 @@ This patch adds a Claude-specific compat mode that:
 - suppresses thinking content blocks
 - returns a Claude `message` object for the classifier
 - leaves text + tool_use intact
-- **default-allows** classifier actions the upstream cannot evaluate (returns a synthetic empty `end_turn` Claude message so Claude Code's classifier falls through as approved)
+- **short-circuits classifier requests when compat is on** — returns a synthetic `msg_`-prefixed Claude `message` with empty content + `end_turn` BEFORE consulting the upstream. This ensures Claude Code's classifier always gets a predictable response shape, even when low-cost upstreams return 200 OK with empty `chat.completion` content (which translates to a malformed Claude message Claude Code rejects as "could not evaluate").
 
 The mode is toggleable from the 9router UI and CLI. The user's auto-combo (`auto-xhigh` / `auto-high` / `auto-medium`) is preserved as-is — 9router does not override the model; it only changes how the response is translated.
 
@@ -34,6 +34,9 @@ src/sse/handlers/chat.js
   → passes it to handleChatCore(...)
     open-sse/handlers/chatCore.js
       → threads it into sharedCtx
+      → **short-circuit** before executor when `shouldDefaultAllowClassifier()` matches
+        (compat on AND request detected as classifier) — returns synthetic Claude `message`
+        with `msg_`-prefixed id + `model` field + `end_turn`, no upstream call
       → passes it to handleStreamingResponse / handleForcedSSEToJson
         open-sse/handlers/chatCore/streamingHandler.js
           → passes it to createSSETransformStreamWithLogger
@@ -43,7 +46,7 @@ src/sse/handlers/chat.js
         open-sse/handlers/chatCore/sseToJsonHandler.js (non-streaming)
           → buildClaudeMessageResponse() builds a Claude `message` when sourceFormat === CLAUDE
           → buildClaudeMessageFromOpenAICompletion() for Chat-Completions SSE → JSON path
-        open-sse/handlers/chatCore.js (default-allow)
+        open-sse/handlers/chatCore.js (default-allow, error-path safety net)
           → buildDefaultAllowClaudeMessage() when executor throws or provider 4xx/5xx
           → returns synthetic Claude `message` with empty content + end_turn
           → Claude Code classifier parses as "no block → allow"
@@ -64,7 +67,9 @@ src/sse/handlers/chat.js
 - `open-sse/transformer/streamToJsonConverter.js`
   - preserves `cache_*_input_tokens` and `input_tokens_details.cached_tokens` in `state.usage` so downstream Claude responses carry the cache field
 - `open-sse/handlers/chatCore.js`
-  - `buildDefaultAllowClaudeMessage()` + `shouldDefaultAllowClassifier()` — when the executor throws or the provider returns 4xx/5xx AND `claudeClassifierCompat !== "off"` AND `sourceFormat === CLAUDE`, returns the synthetic allow-shape instead of an HTTP error
+  - `buildDefaultAllowClaudeMessage()` + `shouldDefaultAllowClassifier()`
+  - **Short-circuits BEFORE the executor when `shouldDefaultAllowClassifier()` matches** — does not consult upstream at all. This is required for low-cost providers (e.g. MiniMax-M3) that return 200 OK with empty `chat.completion` content for the classifier prompt. Pre-fix, this translated to a Claude `message` with `output_tokens: 0` + `chatcmpl`-style id, which Claude Code rejected as "could not evaluate" (fail-closed every gated action).
+  - Defensive safety-net checks at the executor's error catch + 4xx/5xx response handler (kept for when the upstream genuinely fails)
 
 ## UI surfaces
 
@@ -81,7 +86,7 @@ src/sse/handlers/chat.js
 - `tests/translator/golden-response-stream.test.js` — new compat-mode case for the stream-level path
 - `tests/unit/claude-compat-nonstreaming.test.js` — 3 new cases (basic compat, cache fields, provider-returned `chat.completion` JSON)
 - `tests/unit/claude-classifier-routing.test.js` — locks the negative: 9router must NOT override the user-chosen auto combo model
-- `tests/unit/claude-default-allow-classifier.test.js` — 4 cases that lock the default-allow contract (executor throws + compat on/off, 429 + compat on, non-Claude source format)
+- `tests/unit/claude-default-allow-classifier.test.js` — 6 cases: executor throws + compat on/off, 429 + compat on, non-Claude source format, **short-circuits on 200 OK empty content (regression for MiniMax-M3)**, **does NOT short-circuit regular Claude requests**
 
 ## Deploy
 
@@ -138,7 +143,7 @@ The patch lives entirely in source files plus `run.sh` and this `AGENTS.md`. The
    - `GET /api/settings` returns the new key `claudeClassifierCompat` (proof the setting still exists)
    - Browser at `/dashboard/token-saver` shows the `Off / Auto / Always` segmented control (proof the UI patch is still applied)
    - One classifier replay with `always` returns a Claude `message` object with no `thinking` block (proof the translator patch is still applied)
-   - `tests/unit/claude-default-allow-classifier.test.js` all 4 cases pass (proof the upstream-failure fallback is in place)
+   - `tests/unit/claude-default-allow-classifier.test.js` all 6 cases pass (proof the default-allow short-circuit is in place AND doesn't over-fire on regular Claude requests)
 3. **If any of those four fail after a rebase, the patch was lost during conflict resolution and must be reapplied from the file paths listed below.**
 
 Source-file footprint of the patch (keep this list when reviewing a rebase):
