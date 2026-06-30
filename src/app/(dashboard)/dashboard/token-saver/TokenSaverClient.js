@@ -1,7 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Card, Button, Input, Modal, Toggle } from "@/shared/components";
+import {
+  Card,
+  Button,
+  Input,
+  Modal,
+  Toggle,
+  SegmentedControl,
+} from "@/shared/components";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 import { getCurrentLocale, onLocaleChange } from "@/i18n/runtime";
 import {
@@ -9,6 +16,32 @@ import {
   CAVEMAN_LEVELS,
   PONYTAIL_LEVELS,
 } from "../endpoint/endpointConstants";
+
+const CLAUDE_CLASSIFIER_COMPAT_OPTIONS = [
+  {
+    value: "off",
+    label: "Off",
+    desc: "Leave Claude classifier handling unchanged.",
+  },
+  {
+    value: "auto",
+    label: "Auto",
+    desc: "Apply Claude-only compatibility when classifier traffic is detected.",
+  },
+  {
+    value: "always",
+    label: "Always",
+    desc: "Always force Claude classifier compatibility handling.",
+  },
+];
+
+function sanitizeCavemanLevel(level, locale) {
+  const nextLevel = level || "full";
+  const current = CAVEMAN_LEVELS.find((lvl) => lvl.id === nextLevel);
+  return current?.wenyan && !WENYAN_LOCALES.includes(locale)
+    ? "ultra"
+    : nextLevel;
+}
 
 export default function TokenSaverClient() {
   const [rtkEnabled, setRtkEnabledState] = useState(true);
@@ -28,29 +61,19 @@ export default function TokenSaverClient() {
   const [cavemanLevel, setCavemanLevel] = useState("full");
   const [ponytailEnabled, setPonytailEnabled] = useState(false);
   const [ponytailLevel, setPonytailLevel] = useState("full");
-  const [locale, setLocale] = useState("en");
+  const [claudeClassifierCompat, setClaudeClassifierCompat] =
+    useState("off");
+  const [locale, setLocale] = useState(() => getCurrentLocale());
 
   const { copied, copy } = useCopyToClipboard();
-
-  useEffect(() => {
-    setLocale(getCurrentLocale());
-    return onLocaleChange(() => setLocale(getCurrentLocale()));
-  }, []);
 
   const isWenyanLocale = WENYAN_LOCALES.includes(locale);
   const visibleCavemanLevels = isWenyanLocale
     ? CAVEMAN_LEVELS
     : CAVEMAN_LEVELS.filter((lvl) => !lvl.wenyan);
+  const effectiveCavemanLevel = sanitizeCavemanLevel(cavemanLevel, locale);
 
-  useEffect(() => {
-    const current = CAVEMAN_LEVELS.find((lvl) => lvl.id === cavemanLevel);
-    if (current?.wenyan && !isWenyanLocale) {
-      setCavemanLevel("ultra");
-      patchSetting({ cavemanLevel: "ultra" });
-    }
-  }, [isWenyanLocale, cavemanLevel]);
-
-  const patchSetting = async (patch) => {
+  async function patchSetting(patch) {
     try {
       await fetch("/api/settings", {
         method: "PATCH",
@@ -138,8 +161,9 @@ export default function TokenSaverClient() {
   }, [refreshHeadroomStatus]);
 
   const handleCavemanLevel = (level) => {
-    setCavemanLevel(level);
-    patchSetting({ cavemanLevel: level });
+    const nextLevel = sanitizeCavemanLevel(level, locale);
+    setCavemanLevel(nextLevel);
+    patchSetting({ cavemanLevel: nextLevel });
   };
 
   const handlePonytailEnabled = (value) => {
@@ -152,6 +176,13 @@ export default function TokenSaverClient() {
     patchSetting({ ponytailLevel: level });
   };
 
+  const handleClaudeClassifierCompat = (mode) => {
+    setClaudeClassifierCompat(mode);
+    patchSetting({ claudeClassifierCompat: mode });
+  };
+
+  useEffect(() => onLocaleChange(() => setLocale(getCurrentLocale())), []);
+
   useEffect(() => {
     const loadSettings = async () => {
       try {
@@ -162,15 +193,18 @@ export default function TokenSaverClient() {
           setHeadroomEnabled(!!data.headroomEnabled);
           setHeadroomUrl(data.headroomUrl || "http://localhost:8787");
           setCavemanEnabled(!!data.cavemanEnabled);
-          setCavemanLevel(data.cavemanLevel || "full");
+          setCavemanLevel(
+            sanitizeCavemanLevel(data.cavemanLevel || "full", locale)
+          );
           setPonytailEnabled(!!data.ponytailEnabled);
           setPonytailLevel(data.ponytailLevel || "full");
+          setClaudeClassifierCompat(data.claudeClassifierCompat || "off");
           refreshHeadroomStatus();
         }
       } catch {}
     };
     loadSettings();
-  }, [refreshHeadroomStatus]);
+  }, [locale, refreshHeadroomStatus]);
 
   const headroomRunning = !!headroomStatus.running;
   const headroomStatusLabel = headroomStatus.loading
@@ -283,7 +317,7 @@ export default function TokenSaverClient() {
                       key={lvl.id}
                       onClick={() => handleCavemanLevel(lvl.id)}
                       className={`px-3 py-1.5 rounded text-xs font-medium border transition-colors ${
-                        cavemanLevel === lvl.id
+                        effectiveCavemanLevel === lvl.id
                           ? "bg-primary text-white border-primary"
                           : "bg-transparent border-border text-text-muted hover:bg-surface-2"
                       }`}
@@ -295,7 +329,9 @@ export default function TokenSaverClient() {
                 </div>
                 <p className="text-xs text-primary">
                   {
-                    CAVEMAN_LEVELS.find((lvl) => lvl.id === cavemanLevel)
+                    CAVEMAN_LEVELS.find(
+                      (lvl) => lvl.id === effectiveCavemanLevel
+                    )
                       ?.desc
                   }
                 </p>
@@ -356,6 +392,35 @@ export default function TokenSaverClient() {
               checked={ponytailEnabled}
               onChange={() => handlePonytailEnabled(!ponytailEnabled)}
             />
+          </div>
+        </div>
+        <div className="pt-4 mt-4 border-t border-border">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0 flex-1">
+              <p className="font-medium">Claude classifier compatibility</p>
+              <p className="text-sm text-text-muted">
+                Keep Claude classifier requests compatible with Off, Auto, or
+                Always handling.
+              </p>
+            </div>
+            <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:min-w-[320px] sm:items-end">
+              <SegmentedControl
+                options={CLAUDE_CLASSIFIER_COMPAT_OPTIONS.map(
+                  ({ value, label }) => ({ value, label })
+                )}
+                value={claudeClassifierCompat}
+                onChange={handleClaudeClassifierCompat}
+                size="sm"
+                className="w-full sm:w-auto"
+              />
+              <p className="text-xs text-primary sm:text-right">
+                {
+                  CLAUDE_CLASSIFIER_COMPAT_OPTIONS.find(
+                    (option) => option.value === claudeClassifierCompat
+                  )?.desc
+                }
+              </p>
+            </div>
           </div>
         </div>
       </Card>
