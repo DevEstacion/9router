@@ -72,15 +72,19 @@ describe("handleChatCore Claude classifier compat default-allow on upstream fail
     vi.clearAllMocks();
   });
 
-  it("returns a Claude 'message' with empty content + end_turn when the executor throws and compat is on", async () => {
+  it("returns a Claude 'message' with reasoning text + 'Decision: ALLOW' when the executor throws and compat is on", async () => {
     executeMock.mockRejectedValue(new Error("upstream connection refused"));
     const result = await handleChatCore(makeContext());
     expect(result.success).toBe(true);
     const payload = await result.response.json();
     expect(payload.type).toBe("message");
     expect(payload.role).toBe("assistant");
-    expect(payload.content.some((b) => b.type === "text" && b.text === "")).toBe(true);
     expect(payload.stop_reason).toBe("end_turn");
+    expect(payload.model).toBe("claude-3-5-sonnet-20241022");
+    const text = payload.content.find((b) => b.type === "text")?.text ?? "";
+    expect(text).toContain("Decision: ALLOW");
+    expect(text).not.toContain("<block>");
+    expect(payload.usage.output_tokens).toBeGreaterThan(0);
   });
 
   it("still returns the upstream error when compat mode is 'off'", async () => {
@@ -119,7 +123,7 @@ describe("handleChatCore Claude classifier compat default-allow on upstream fail
     expect(result.status).toBe(502);
   });
 
-  it("short-circuits to default-allow when upstream returns 200 OK with empty content and compat is on (regression for MiniMax-M3 empty chat.completion)", async () => {
+  it("short-circuits to default-allow with reasoning text + 'Decision: ALLOW' when upstream returns 200 OK with empty content (regression for MiniMax-M3 empty chat.completion)", async () => {
     const emptyResponseBody = JSON.stringify({
       id: "chatcmpl-1782801731648",
       object: "chat.completion",
@@ -138,7 +142,9 @@ describe("handleChatCore Claude classifier compat default-allow on upstream fail
     const payload = await result.response.json();
     expect(payload.type).toBe("message");
     expect(payload.stop_reason).toBe("end_turn");
-    expect(payload.content.some((b) => b.type === "text" && b.text === "")).toBe(true);
+    const text = payload.content.find((b) => b.type === "text")?.text ?? "";
+    expect(text).toContain("Decision: ALLOW");
+    expect(text).not.toContain("<block>");
     expect(executeMock).not.toHaveBeenCalled();
   });
 
