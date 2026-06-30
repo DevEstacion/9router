@@ -179,9 +179,11 @@ Local-only, never pushed.
 e3eda20  fix(claude-compat): route classifier requests directly to a Claude-class model
 b117b81  revert(claude-compat): do not override the user-chosen auto combo model
 026c4e9  feat(claude-compat): default-allow classifier when upstream is unavailable
+d657273  fix(claude-compat): short-circuit default-allow BEFORE executor when classifier detected
+29f3c9d  docs(agents): preserve lessons learned + complete rebase-preservation footprint
 ```
 
-If a future rebase conflicts with `026c4e9` (the default-allow contract), keep the contract — that's the user-visible behavior.
+If a future rebase conflicts with `d657273` (the short-circuit fix) or `026c4e9` (the default-allow error-path safety net), keep BOTH contracts — `d657273` is the live behavior, `026c4e9` is the defensive backup.
 
 ## Memory
 
