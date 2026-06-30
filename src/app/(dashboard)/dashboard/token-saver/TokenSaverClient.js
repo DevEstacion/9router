@@ -7,7 +7,6 @@ import {
   Input,
   Modal,
   Toggle,
-  SegmentedControl,
 } from "@/shared/components";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 import { getCurrentLocale, onLocaleChange } from "@/i18n/runtime";
@@ -16,24 +15,6 @@ import {
   CAVEMAN_LEVELS,
   PONYTAIL_LEVELS,
 } from "../endpoint/endpointConstants";
-
-const CLAUDE_CLASSIFIER_COMPAT_OPTIONS = [
-  {
-    value: "off",
-    label: "Off",
-    desc: "Leave Claude classifier handling unchanged.",
-  },
-  {
-    value: "auto",
-    label: "Auto",
-    desc: "Apply Claude-only compatibility when classifier traffic is detected.",
-  },
-  {
-    value: "always",
-    label: "Always",
-    desc: "Always force Claude classifier compatibility handling.",
-  },
-];
 
 function sanitizeCavemanLevel(level, locale) {
   const nextLevel = level || "full";
@@ -61,8 +42,6 @@ export default function TokenSaverClient() {
   const [cavemanLevel, setCavemanLevel] = useState("full");
   const [ponytailEnabled, setPonytailEnabled] = useState(false);
   const [ponytailLevel, setPonytailLevel] = useState("full");
-  const [claudeClassifierCompat, setClaudeClassifierCompat] =
-    useState("off");
   const [locale, setLocale] = useState(() => getCurrentLocale());
 
   const { copied, copy } = useCopyToClipboard();
@@ -176,11 +155,6 @@ export default function TokenSaverClient() {
     patchSetting({ ponytailLevel: level });
   };
 
-  const handleClaudeClassifierCompat = (mode) => {
-    setClaudeClassifierCompat(mode);
-    patchSetting({ claudeClassifierCompat: mode });
-  };
-
   useEffect(() => onLocaleChange(() => setLocale(getCurrentLocale())), []);
 
   useEffect(() => {
@@ -198,7 +172,6 @@ export default function TokenSaverClient() {
           );
           setPonytailEnabled(!!data.ponytailEnabled);
           setPonytailLevel(data.ponytailLevel || "full");
-          setClaudeClassifierCompat(data.claudeClassifierCompat || "off");
           refreshHeadroomStatus();
         }
       } catch {}
@@ -392,35 +365,6 @@ export default function TokenSaverClient() {
               checked={ponytailEnabled}
               onChange={() => handlePonytailEnabled(!ponytailEnabled)}
             />
-          </div>
-        </div>
-        <div className="pt-4 mt-4 border-t border-border">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0 flex-1">
-              <p className="font-medium">Claude classifier compatibility</p>
-              <p className="text-sm text-text-muted">
-                Keep Claude classifier requests compatible with Off, Auto, or
-                Always handling.
-              </p>
-            </div>
-            <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:min-w-[320px] sm:items-end">
-              <SegmentedControl
-                options={CLAUDE_CLASSIFIER_COMPAT_OPTIONS.map(
-                  ({ value, label }) => ({ value, label })
-                )}
-                value={claudeClassifierCompat}
-                onChange={handleClaudeClassifierCompat}
-                size="sm"
-                className="w-full sm:w-auto"
-              />
-              <p className="text-xs text-primary sm:text-right">
-                {
-                  CLAUDE_CLASSIFIER_COMPAT_OPTIONS.find(
-                    (option) => option.value === claudeClassifierCompat
-                  )?.desc
-                }
-              </p>
-            </div>
           </div>
         </div>
       </Card>
