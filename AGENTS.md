@@ -76,3 +76,35 @@ AGENTS.md                                         # this file
 Tests in `tests/unit/openai-to-claude.test.js`, `tests/translator/golden-response-stream.test.js`, `tests/unit/claude-compat-nonstreaming.test.js`, `tests/unit/claude-classifier-routing.test.js`, `tests/unit/claude-default-allow-classifier.test.js`.
 
 If a future rebase drops ANY of these, the patch is broken — the synthetic `<block>no</block>` short-circuit is the entire feature.
+
+## Branching Workflow
+
+Three branches, three jobs — never mix them:
+
+| Branch | Role | What's allowed |
+|---|---|---|
+| `master` | Tracks `upstream/master`. Clean. | Only `git fetch upstream && git reset --hard upstream/master` to resync. Never commit directly. |
+| `private-changes` | Local consolidation of all our work-in-progress. Holds dirty history, archaeology, half-attempts, and final clean commits alike. | Anything goes. This is where active development happens. |
+| `fix/<topic>` | Per-PR clean source branch off `upstream/master`. | 1–N atomic commits only, no WIP. Pushed to `fork`, PR'd against `decolua/9router:master`. |
+
+### Per-PR workflow
+
+1. **Develop on `private-changes`** — make commits freely, including debug archaeology. Don't worry about commit hygiene.
+2. **Open a new PR → create `fix/<topic>`** off `upstream/master`. Cherry-pick or re-apply the relevant final commits from `private-changes`. No archaeology in the PR diff.
+3. **Push `fix/<topic>` to `fork`** and `gh pr create --repo decolua/9router --head DevEstacion:fix/<topic>`.
+4. **After PR merges upstream** — `private-changes` continues accumulating. Force-with-lease push any in-flight fixes to keep it backed up on the fork too (`git push --force-with-lease fork private-changes`).
+5. **`master` stays at `upstream/master`** — never diverged, just `git pull` for fresh upstream.
+
+### Recovery
+
+If `private-changes` is lost (e.g., accidental `reset --hard` on it):
+```bash
+git reflog | grep <SHA>          # find the lost tip
+git branch private-changes <SHA> # restore
+```
+
+### Don't
+
+- Don't put WIP commits on `master` — it tracks upstream only.
+- Don't push `private-changes` to `decolua/9router` (the upstream project). It stays on `fork` at most.
+- Don't put archaeology commits on `fix/<topic>` — they live on `private-changes` only.
