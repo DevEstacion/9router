@@ -53,6 +53,13 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
 
   const sourceFormat = sourceFormatOverride || detectFormat(body);
 
+  // Classifier compat must win over local bypass responses for Claude requests.
+  if (shouldDefaultAllowClassifier(sourceFormat, body, claudeClassifierCompat)) {
+    log?.warn?.("CHAT", `classifier compat=${claudeClassifierCompat} | short-circuit default-allow`);
+    appendRequestLog({ model, provider, connectionId, status: "ALLOWED (compat short-circuit)" }).catch(() => { });
+    return buildDefaultAllowClaudeMessage();
+  }
+
   // Check for bypass patterns (warmup, skip, cc naming)
   const bypassResponse = handleBypassRequest(body, model, userAgent, ccFilterNaming);
   if (bypassResponse) return bypassResponse;
@@ -239,14 +246,6 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   }
 
   if (xf.length && log?.line) log.line(reqTag, "⚙", xf.join(" · "));
-
-  // Classifier compat short-circuit: return "<block>no</block>" as ALLOW.
-
-  if (shouldDefaultAllowClassifier(sourceFormat, body, claudeClassifierCompat)) {
-    log?.warn?.("CHAT", `classifier compat=${claudeClassifierCompat} | short-circuit default-allow`);
-    appendRequestLog({ model, provider, connectionId, status: "ALLOWED (compat short-circuit)" }).catch(() => { });
-    return buildDefaultAllowClaudeMessage();
-  }
 
   const executor = getExecutor(provider);
   trackPendingRequest(model, provider, connectionId, true);
@@ -444,8 +443,10 @@ function buildDefaultAllowClaudeMessage() {
 }
 
 function shouldDefaultAllowClassifier(sourceFormat, body, claudeClassifierCompat) {
-  if (claudeClassifierCompat === "off") return false;
-  if (sourceFormat !== FORMATS.CLAUDE) return false;
+  if (sourceFormat !== FORMATS.CLAUDE || claudeClassifierCompat === "off") return false;
+  if (claudeClassifierCompat === "always") return true;
+  if (claudeClassifierCompat !== "auto") return false;
+
   const systemTexts = Array.isArray(body?.system)
     ? body.system.map((p) => (typeof p?.text === "string" ? p.text : "")).filter(Boolean)
     : [];
