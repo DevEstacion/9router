@@ -1,0 +1,20 @@
+[Unit]
+Description=9Router - AI Router & Token Saver
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/ron/Documents/Projects/9router/.next-cli-build/standalone/9router
+EnvironmentFile=/home/ron/Documents/Projects/9router/.env
+Environment=PATH=/home/ron/.nvm/versions/node/v25.6.0/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/ron/.nvm/versions/node/v25.6.0/bin/node server.js
+Restart=always
+RestartSec=5
+StartLimitBurst=0
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=9router
+
+[Install]
+WantedBy=default.target
