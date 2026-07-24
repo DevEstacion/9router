@@ -22,6 +22,7 @@ const CODEX_SSE_USER_OUTPUT_PATTERNS = [
   '"type":"response.function_call_arguments.delta"',
 ];
 const CODEX_SSE_PEEK_BYTES = 256 * 1024;
+const GROK_WIRE_DEBUG_MAX_BYTES = 256 * 1024;
 const CODEX_MODEL_CAPACITY_MESSAGE = "Selected model is at capacity. Please try a different model.";
 
 // Server-generated item id prefixes that Codex /responses cannot resolve when store=false
@@ -180,6 +181,71 @@ function codexSseErrorResponse(status, message) {
   });
 }
 
+function grokWireDebugEnabled(model) {
+  return process.env.GROK_WIRE_DEBUG === "1" && String(model || "").startsWith("grok-");
+}
+
+function makeReplayStream(chunks, upstream) {
+  let reader;
+  return new ReadableStream({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(chunk);
+      reader = upstream.getReader();
+    },
+    async pull(controller) {
+      try {
+        const { done, value } = await reader.read();
+        if (done) controller.close();
+        else controller.enqueue(value);
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+    cancel(reason) {
+      try { reader?.cancel(reason); } catch { /* noop */ }
+    },
+  });
+}
+
+// Temporary redacted diagnostics for empty Grok CLI /responses streams.
+export async function inspectGrokWire(response, { model, url, bodyBytes, inputItems, toolCount }) {
+  const headers = response.headers;
+  console.log(`[GROK_WIRE] request url=${url} model=${model} bodyBytes=${bodyBytes} inputItems=${inputItems} tools=${toolCount}`);
+  console.log(`[GROK_WIRE] response status=${response.status} contentType=${headers.get("content-type") || "?"} contentLength=${headers.get("content-length") || "?"} requestId=${headers.get("x-request-id") || "?"}`);
+  if (!response.body) return response;
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const chunks = [];
+  let bytes = 0;
+  let text = "";
+  try {
+    while (bytes < GROK_WIRE_DEBUG_MAX_BYTES) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      bytes += value.byteLength;
+      text += decoder.decode(value, { stream: true });
+    }
+    text += decoder.decode();
+    const events = [...new Set([...text.matchAll(/^event:\s*(.+)$/gm)].map(([, event]) => event.trim()))];
+    const errorData = text.match(/^event:\s*error\s*\r?\ndata:\s*(.+)$/m)?.[1];
+    let error = null;
+    try { error = findNestedMessage(JSON.parse(errorData)); } catch { /* no error event payload */ }
+    console.log(`[GROK_WIRE] stream bytes=${bytes} events=${events.join(",") || "none"} error=${error || "none"}`);
+    reader.releaseLock();
+    return new Response(makeReplayStream(chunks, response.body), {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
+  } catch (error) {
+    console.log(`[GROK_WIRE] inspectError ${error.name}: ${error.message}`);
+    try { await reader.cancel(); } catch { /* noop */ }
+    return response;
+  }
+}
+
 /**
  * Codex Executor - handles OpenAI Codex API (Responses API format)
  * Automatically injects default instructions if missing
@@ -269,6 +335,16 @@ export class CodexExecutor extends BaseExecutor {
     let attempt = 0;
     while (true) {
       const result = await super.execute(args);
+      if (grokWireDebugEnabled(args.model)) {
+        const wireResponse = await inspectGrokWire(result.response, {
+          model: args.model,
+          url: result.url,
+          bodyBytes: JSON.stringify(result.transformedBody).length,
+          inputItems: Array.isArray(result.transformedBody?.input) ? result.transformedBody.input.length : 0,
+          toolCount: Array.isArray(result.transformedBody?.tools) ? result.transformedBody.tools.length : 0,
+        });
+        result.response = wireResponse;
+      }
       const peek = await this._peekSseTransientError(result.response);
       if (!peek.matched) {
         // Replace body with re-assembled stream (prefix bytes already read + rest)
