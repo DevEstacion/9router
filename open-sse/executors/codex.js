@@ -15,6 +15,7 @@ import { resolveSessionId } from "../utils/sessionManager.js";
 // SSE error patterns inside 200-OK bodies. Some retry same account first; capacity rotates accounts.
 const CODEX_SSE_RETRY_PATTERNS = ["server_is_overloaded", "service_unavailable_error"];
 const CODEX_SSE_ACCOUNT_FALLBACK_PATTERNS = ["selected model is at capacity", "model_at_capacity"];
+const CODEX_SSE_REQUEST_ERROR_PATTERNS = ["input exceeds the context window", "context window exceeds limit"];
 const CODEX_SSE_USER_OUTPUT_PATTERNS = [
   "event: response.output_text.delta",
   "event: response.function_call_arguments.delta",
@@ -286,6 +287,10 @@ export class CodexExecutor extends BaseExecutor {
         result.response = codexSseErrorResponse(HTTP_STATUS.SERVICE_UNAVAILABLE, peek.message || CODEX_MODEL_CAPACITY_MESSAGE);
         return result;
       }
+      if (peek.requestError) {
+        result.response = codexSseErrorResponse(HTTP_STATUS.BAD_REQUEST, peek.message || peek.matched);
+        return result;
+      }
       if (attempt >= attempts) {
         args.log?.warn?.("RETRY", `CODEX | SSE overloaded "${peek.matched}" — retries exhausted (${attempt}/${attempts})`);
         result.response = codexSseErrorResponse(HTTP_STATUS.SERVICE_UNAVAILABLE, peek.message || peek.matched);
@@ -299,16 +304,17 @@ export class CodexExecutor extends BaseExecutor {
   }
 
   // Peek first N bytes of SSE body to detect upstream transient errors.
-  // Returns { matched: string|null, message: string|null, accountFallback: boolean, replacementBody: ReadableStream|null }.
+  // Returns { matched, message, accountFallback, requestError, replacementBody }.
   // Caller must use replacementBody when no error matched (original body has been read).
   async _peekSseTransientError(response) {
-    if (!response || !response.ok || !response.body) return { matched: null, message: null, accountFallback: false, replacementBody: null };
+    if (!response || !response.ok || !response.body) return { matched: null, message: null, accountFallback: false, requestError: false, replacementBody: null };
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     const chunks = [];
     let text = "";
     let matched = null;
     let accountFallback = false;
+    let requestError = false;
     try {
       while (text.length < CODEX_SSE_PEEK_BYTES) {
         const { done, value } = await reader.read();
@@ -318,6 +324,8 @@ export class CodexExecutor extends BaseExecutor {
         const lowerText = text.toLowerCase();
         const accountHit = CODEX_SSE_ACCOUNT_FALLBACK_PATTERNS.find(p => lowerText.includes(p));
         if (accountHit) { matched = accountHit; accountFallback = true; break; }
+        const requestHit = CODEX_SSE_REQUEST_ERROR_PATTERNS.find(p => lowerText.includes(p));
+        if (requestHit) { matched = requestHit; requestError = true; break; }
         const retryHit = CODEX_SSE_RETRY_PATTERNS.find(p => lowerText.includes(p));
         if (retryHit) { matched = retryHit; break; }
         if (CODEX_SSE_USER_OUTPUT_PATTERNS.some(p => lowerText.includes(p))) break;
@@ -329,7 +337,7 @@ export class CodexExecutor extends BaseExecutor {
     if (matched) {
       try { await reader.cancel(); } catch { /* noop */ }
       try { reader.releaseLock(); } catch { /* noop */ }
-      return { matched, message: extractSseErrorMessage(text, matched), accountFallback, replacementBody: null };
+      return { matched, message: extractSseErrorMessage(text, matched), accountFallback, requestError, replacementBody: null };
     }
 
     reader.releaseLock();
@@ -353,7 +361,7 @@ export class CodexExecutor extends BaseExecutor {
         try { upstreamReader?.cancel(reason); } catch { /* noop */ }
       },
     });
-    return { matched: null, message: null, accountFallback: false, replacementBody };
+    return { matched: null, message: null, accountFallback: false, requestError: false, replacementBody };
   }
 
   // Parse Codex usage_limit_reached to extract precise resetsAtMs; fallback to default otherwise

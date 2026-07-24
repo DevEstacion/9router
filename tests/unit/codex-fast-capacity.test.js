@@ -52,6 +52,28 @@ describe("Codex fast tier and capacity handling", () => {
     expect(peek.message).toBe("Selected model is at capacity. Please try a different model.");
   });
 
+  it("classifies a 200-SSE context rejection as request failure", async () => {
+    const executor = new CodexExecutor();
+    const response = new Response(streamFromText([
+      "event: response.created",
+      'data: {"type":"response.created"}',
+      "",
+      "event: error",
+      'data: {"error":{"message":"Your input exceeds the context window of this model. Please adjust your input and try again."}}',
+      "",
+      "event: response.failed",
+      'data: {"type":"response.failed"}',
+      "",
+    ].join("\n")), {
+      status: 200,
+      headers: { "Content-Type": "text/event-stream" },
+    });
+
+    const peek = await executor._peekSseTransientError(response);
+    expect(peek.requestError).toBe(true);
+    expect(peek.message).toBe("Your input exceeds the context window of this model. Please adjust your input and try again.");
+  });
+
   it("reassembles normal SSE after peeking", async () => {
     const executor = new CodexExecutor();
     const text = [
