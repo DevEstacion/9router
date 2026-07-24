@@ -182,7 +182,9 @@ function codexSseErrorResponse(status, message) {
 }
 
 function grokWireDebugEnabled(model) {
-  return process.env.GROK_WIRE_DEBUG === "1" && String(model || "").startsWith("grok-");
+  const value = String(model || "");
+  // Combo resolution passes Codex upstream model here, not client alias `grok-high`.
+  return process.env.GROK_WIRE_DEBUG === "1" && (value.startsWith("grok-") || value === "gpt-5.6-sol-high");
 }
 
 function makeReplayStream(chunks, upstream) {
