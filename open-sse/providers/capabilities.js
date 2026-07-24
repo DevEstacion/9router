@@ -108,10 +108,17 @@ export const MODEL_CAPABILITIES = {
 
 const KIRO_GPT_5_6_CAPABILITIES = { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 };
 
-// Codex OAuth (ChatGPT backend) — per-model context window reported by upstream
-// (lower than OpenAI API's 1.05M). Sol differs from Terra/Luna. #2720
-const CODEX_GPT_56_SOL_CAPS  = { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 372000, maxOutput: 128000 };
-const CODEX_GPT_56_DEFAULT_CAPS = { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 };
+// Codex subscription surface reports 272k nominal context for every GPT-5.6 tier.
+// Codex reserves 5% internally; API-platform limits do not apply here. #2720
+const CODEX_GPT_56_CAPS = { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 };
+const CODEX_GPT_56_PROVIDER_CAPS = {
+  "gpt-5.6-sol": CODEX_GPT_56_CAPS,
+  "gpt-5.6-sol-review": CODEX_GPT_56_CAPS,
+  "gpt-5.6-terra": CODEX_GPT_56_CAPS,
+  "gpt-5.6-terra-review": CODEX_GPT_56_CAPS,
+  "gpt-5.6-luna": CODEX_GPT_56_CAPS,
+  "gpt-5.6-luna-review": CODEX_GPT_56_CAPS,
+};
 
 /**
  * Provider-specific capability overrides. Keyed by provider alias/id.
@@ -126,14 +133,8 @@ export const PROVIDER_CAPABILITIES = {
     "deepseek-ai/deepseek-v4-pro": { reasoning: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 65536 },
     "deepseek-ai/deepseek-v4-flash": { reasoning: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 65536 },
   },
-  "codex": {
-    "gpt-5.6-sol":               CODEX_GPT_56_SOL_CAPS,
-    "gpt-5.6-sol-review":        CODEX_GPT_56_SOL_CAPS,
-    "gpt-5.6-terra":             CODEX_GPT_56_DEFAULT_CAPS,
-    "gpt-5.6-terra-review":      CODEX_GPT_56_DEFAULT_CAPS,
-    "gpt-5.6-luna":              CODEX_GPT_56_DEFAULT_CAPS,
-    "gpt-5.6-luna-review":       CODEX_GPT_56_DEFAULT_CAPS,
-  },
+  "codex": CODEX_GPT_56_PROVIDER_CAPS,
+  "cx": CODEX_GPT_56_PROVIDER_CAPS,
   "kiro": {
     "gpt-5.6-sol": KIRO_GPT_5_6_CAPABILITIES,
     "gpt-5.6-terra": KIRO_GPT_5_6_CAPABILITIES,
@@ -318,6 +319,11 @@ export function getCapabilitiesForModel(provider, model) {
     const providerCaps = PROVIDER_CAPABILITIES[provider];
     if (providerCaps?.[model]) return { ...DEFAULT_CAPABILITIES, ...providerCaps[model] };
     if (providerCaps?.[baseModel]) return { ...DEFAULT_CAPABILITIES, ...providerCaps[baseModel] };
+    // Codex virtual suffixes select reasoning effort; they do not change model limits.
+    if (provider === "codex" || provider === "cx") {
+      const unsuffixedModel = baseModel.replace(/-(?:none|minimal|low|medium|high|xhigh|max)$/, "");
+      if (providerCaps?.[unsuffixedModel]) return { ...DEFAULT_CAPABILITIES, ...providerCaps[unsuffixedModel] };
+    }
   }
 
   // 2. Canonical exact

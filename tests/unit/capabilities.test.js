@@ -43,4 +43,18 @@ describe("getCapabilitiesForModel", () => {
     expect(getCapabilitiesForModel("kiro", "gpt-5.6-luna-agentic")).toMatchObject(kiroGpt56Expected);
     expect(getCapabilitiesForModel("kiro", "gpt-5.6-sol-thinking-agentic")).toMatchObject(kiroGpt56Expected);
   });
+
+  it("reports Codex subscription GPT 5.6 effort variants with the 272k context window", () => {
+    for (const provider of ["codex", "cx"]) {
+      for (const model of [
+        "gpt-5.6-sol",
+        "gpt-5.6-sol-high",
+        "gpt-5.6-sol-review-high",
+        "gpt-5.6-terra-xhigh",
+        "gpt-5.6-luna-low",
+      ]) {
+        expect(getCapabilitiesForModel(provider, model).contextWindow).toBe(272000);
+      }
+    }
+  });
 });
