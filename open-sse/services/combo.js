@@ -320,13 +320,8 @@ export async function handleComboChat({ body, models, handleSingleModel, log, co
   const status = allDisabled ? 503 : (lastStatus || 503);
   const msg = lastError || "All combo models unavailable";
 
-  if (earliestRetryAfter) {
-    const retryHuman = formatRetryAfter(earliestRetryAfter);
-    log.warn("COMBO", `All models failed | ${msg} (${retryHuman})`);
-    return unavailableResponse(status, msg, earliestRetryAfter, retryHuman);
-  }
-
-  log.warn("COMBO", `All models failed | ${msg}`);
+  const retryHuman = earliestRetryAfter ? formatRetryAfter(earliestRetryAfter) : null;
+  log.warn("COMBO", `All models failed | ${msg}${retryHuman ? ` (${retryHuman})` : ""}`);
   if (sourceFormat === FORMATS.OPENAI_RESPONSES && stream) {
     return new Response(
       formatSSE({
@@ -342,6 +337,9 @@ export async function handleComboChat({ body, models, handleSingleModel, log, co
       }, FORMATS.OPENAI_RESPONSES) + SSE_DONE,
       { status: 200, headers: SSE_HEADERS_CORS },
     );
+  }
+  if (earliestRetryAfter) {
+    return unavailableResponse(status, msg, earliestRetryAfter, retryHuman);
   }
   return new Response(
     JSON.stringify({ error: { message: msg } }),
