@@ -6,6 +6,9 @@ import { checkFallbackError, formatRetryAfter } from "./accountFallback.js";
 import { unavailableResponse } from "../utils/error.js";
 import { getCapabilitiesForModel } from "../providers/capabilities.js";
 import { extractTextContent } from "../translator/formats/gemini.js";
+import { FORMATS } from "../translator/formats.js";
+import { SSE_DONE, SSE_HEADERS_CORS } from "../utils/sseConstants.js";
+import { formatSSE } from "../utils/streamHelpers.js";
 
 // Hard capabilities = input modalities; missing one drops request data (e.g. image
 // stripped). Must be prioritized. Soft (e.g. search) only degrades a feature.
@@ -226,7 +229,7 @@ export function getComboModelsFromData(modelStr, combosData) {
  * @param {number|string} [options.comboStickyLimit=1] - Requests per combo model before switching
  * @returns {Promise<Response>}
  */
-export async function handleComboChat({ body, models, handleSingleModel, log, comboName, comboStrategy, comboStickyLimit = 1, autoSwitch = true }) {
+export async function handleComboChat({ body, models, handleSingleModel, log, comboName, comboStrategy, comboStickyLimit = 1, autoSwitch = true, sourceFormat, stream }) {
   // Apply rotation strategy if enabled
   let rotatedModels = getRotatedModels(models, comboName, comboStrategy, comboStickyLimit);
 
@@ -324,6 +327,22 @@ export async function handleComboChat({ body, models, handleSingleModel, log, co
   }
 
   log.warn("COMBO", `All models failed | ${msg}`);
+  if (sourceFormat === FORMATS.OPENAI_RESPONSES && stream) {
+    return new Response(
+      formatSSE({
+        event: "response.failed",
+        data: {
+          type: "response.failed",
+          response: {
+            id: `resp_${crypto.randomUUID()}`,
+            status: "failed",
+            error: { message: msg },
+          },
+        },
+      }, FORMATS.OPENAI_RESPONSES) + SSE_DONE,
+      { status: 200, headers: SSE_HEADERS_CORS },
+    );
+  }
   return new Response(
     JSON.stringify({ error: { message: msg } }),
     { status, headers: { "Content-Type": "application/json" } }
