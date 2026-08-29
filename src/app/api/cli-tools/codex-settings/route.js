@@ -7,6 +7,10 @@ import fs from "fs/promises";
 import path from "path";
 import os from "os";
 import { parseTOML, stringifyTOML } from "confbox";
+import {
+  CODEX_GPT_56_COMPACT_TOKEN_LIMIT,
+  CODEX_GPT_56_CONTEXT_WINDOW,
+} from "open-sse/providers/capabilities.js";
 
 const execAsync = promisify(exec);
 
@@ -79,6 +83,18 @@ const has9RouterConfig = (config) => {
   return config.includes("model_provider = \"9router\"") || config.includes("[model_providers.9router]");
 };
 
+const isCodexGpt56 = (model) => /gpt-5\.6-(sol|terra|luna)/.test(model || "");
+
+const applyCodexGpt56Window = (parsed, model) => {
+  if (isCodexGpt56(model)) {
+    parsed.model_context_window = CODEX_GPT_56_CONTEXT_WINDOW;
+    parsed.model_auto_compact_token_limit = CODEX_GPT_56_COMPACT_TOKEN_LIMIT;
+    return;
+  }
+  delete parsed.model_context_window;
+  delete parsed.model_auto_compact_token_limit;
+};
+
 // GET - Check codex CLI and read current settings
 export async function GET() {
   try {
@@ -131,6 +147,7 @@ export async function POST(request) {
     // Update only 9Router related fields (api_key goes to auth.json, not config.toml)
     parsed.model = model;
     parsed.model_provider = "9router";
+    applyCodexGpt56Window(parsed, model);
 
     // Update or create 9router provider section (no api_key - Codex reads from auth.json)
     // Ensure /v1 suffix is added only once
@@ -186,6 +203,8 @@ export async function DELETE() {
     if (parsed.model_provider === "9router") {
       delete parsed.model;
       delete parsed.model_provider;
+      delete parsed.model_context_window;
+      delete parsed.model_auto_compact_token_limit;
     }
 
     // Remove 9router provider section

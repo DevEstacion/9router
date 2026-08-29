@@ -33,7 +33,7 @@ const APPLY_INPUT = {
   baseUrl: "http://127.0.0.1:20128/v1",
   apiKey: "sk-test",
   model: "cx/gpt-5.6-sol",
-  contextWindow: 400000,
+  contextWindow: 872000,
   subagentModels: {
     "general-purpose": { model: "cc/claude-sonnet-5", contextWindow: 1000000 },
     explore: { model: "gemini/gemini-3-flash", contextWindow: 1048576 },
@@ -49,7 +49,7 @@ describe("grokBuildConfig", () => {
     expect(parsed.model).toMatchObject({
       model: "cx/gpt-5.6-sol",
       base_url: "http://127.0.0.1:20128/v1",
-      context_window: 400000,
+      context_window: 872000,
     });
     expect(parsed.subagentMappings).toMatchObject({
       "general-purpose": "9router-general-purpose",

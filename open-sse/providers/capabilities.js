@@ -132,9 +132,11 @@ export const MODEL_CAPABILITIES = {
 
 const KIRO_GPT_5_6_CAPABILITIES = { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 };
 
-// Codex subscription surface reports 272k nominal context for every GPT-5.6 tier.
-// Codex reserves 5% internally; API-platform limits do not apply here. #2720
-const CODEX_GPT_56_CAPS = { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 };
+// Codex catalog default is 272k; live Team probe + 840k chat tests confirmed
+// max_context_window=872000 is accepted for sol/terra/luna. 1M is rejected.
+export const CODEX_GPT_56_CONTEXT_WINDOW = 872000;
+export const CODEX_GPT_56_COMPACT_TOKEN_LIMIT = 780000;
+const CODEX_GPT_56_CAPS = { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: CODEX_GPT_56_CONTEXT_WINDOW, maxOutput: 128000 };
 const CODEX_GPT_56_PROVIDER_CAPS = {
   "gpt-5.6-sol": CODEX_GPT_56_CAPS,
   "gpt-5.6-sol-review": CODEX_GPT_56_CAPS,
