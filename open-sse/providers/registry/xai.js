@@ -28,6 +28,7 @@ export default {
   },
   models: [
     { id: "grok-4.6", name: "Grok 4.6" },
+    { id: "grok-4.6-medium", name: "Grok 4.6 (Medium)", upstreamModelId: "grok-4.6(medium)" },
     { id: "grok-4.5", name: "Grok 4.5" },
     { id: "grok-4", name: "Grok 4" },
     { id: "grok-4-fast-reasoning", name: "Grok 4 Fast Reasoning" },
