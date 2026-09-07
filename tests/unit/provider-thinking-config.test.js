@@ -6,8 +6,25 @@ import { translateRequest } from "../../open-sse/translator/index.js";
 import { stripThinkingSuffix } from "../../open-sse/translator/concerns/thinkingUnified.js";
 import { DefaultExecutor } from "../../open-sse/executors/default.js";
 
-describe("xAI Grok 4.6 medium preset", () => {
-  it.each(["openai", "claude", "openai-responses"])("resolves the preset through %s translation and default dispatch", async (format) => {
+describe("xAI Grok hyphenated effort aliases", () => {
+  it.each(["none", "minimal", "low", "medium", "high", "xhigh"])("maps grok-4.6-%s to grok-4.6 plus reasoning_effort", async (effort) => {
+    const { provider, model } = await getModelInfoCore(`xai/grok-4.6-${effort}`);
+    expect(provider).toBe("xai");
+    const upstreamModel = getModelUpstreamId(provider, model);
+    expect(upstreamModel).toBe(`grok-4.6(${effort})`);
+    const translated = translateRequest("openai", "openai", upstreamModel, {
+      model,
+      messages: [{ role: "user", content: "hello" }],
+      max_tokens: 100,
+      stream: false,
+    }, false, {}, provider);
+    translated.model = stripThinkingSuffix(upstreamModel);
+    const outbound = new DefaultExecutor(provider).transformRequest(model, translated);
+    expect(outbound.model).toBe("grok-4.6");
+    expect(outbound.reasoning_effort).toBe(effort);
+  });
+
+  it.each(["openai", "claude", "openai-responses"])("resolves grok-4.6-medium through %s translation and default dispatch", async (format) => {
     const { provider, model } = await getModelInfoCore("xai/grok-4.6-medium");
     expect(provider).toBe("xai");
     const upstreamModel = getModelUpstreamId(provider, model);
@@ -28,20 +45,21 @@ describe("xAI Grok 4.6 medium preset", () => {
     expect(executor.buildUrl(model, false)).toBe("https://api.x.ai/v1/chat/completions");
   });
 
-  it("preserves explicit parenthesized overrides", () => {
-    const model = getModelUpstreamId("xai", "grok-4.6-medium(high)");
-    expect(model).toBe("grok-4.6(high)");
-    const body = translateRequest("openai", "openai", model, {
+  it("maps grok-4.5 hyphenated efforts and preserves parenthesized overrides", () => {
+    expect(getModelUpstreamId("xai", "grok-4.5-low")).toBe("grok-4.5(low)");
+    expect(getModelUpstreamId("xai", "grok-4.6-medium(high)")).toBe("grok-4.6(high)");
+    const body = translateRequest("openai", "openai", "grok-4.6(high)", {
       messages: [{ role: "user", content: "hello" }],
       reasoning_effort: "low",
     }, false, {}, "xai");
     expect(body.reasoning_effort).toBe("high");
   });
 
-  it("leaves base models and other providers unchanged", () => {
+  it("leaves base models, non-effort suffixes, and other providers unchanged", () => {
     expect(getModelUpstreamId("xai", "grok-4.6")).toBe("grok-4.6");
     expect(getModelUpstreamId("xai", "grok-4.6(medium)")).toBe("grok-4.6(medium)");
-    expect(getModelUpstreamId("openai", "grok-4.6-medium")).toBe("grok-4.6-medium");
+    expect(getModelUpstreamId("xai", "grok-4-fast-reasoning")).toBe("grok-4-fast-reasoning");
+    expect(getModelUpstreamId("openai", "grok-4.6-low")).toBe("grok-4.6-low");
     expect(getModelUpstreamId("gcli", "grok-4.6-medium")).toBe("grok-4.6-medium");
     expect(getModelUpstreamId("gcli", "grok-4.5-medium")).toBe("grok-4.5");
   });

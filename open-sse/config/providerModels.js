@@ -5,7 +5,11 @@ import { PROVIDER_MODELS } from "../providers/index.js";
 import { modelQuotaFamily, modelStrip, modelTargetFormat, modelSupportedFormats, normalizeModelId } from "../providers/models/schema.js";
 import { CODEX_REVIEW_SUFFIX, isMuseSparkModel } from "../providers/models/helpers.js";
 import { FORMATS } from "../translator/formats.js";
+import { LEVEL_TO_BUDGET } from "../translator/concerns/thinking.js";
 export { PROVIDER_MODELS };
+
+const THINKING_EFFORTS = new Set([...Object.keys(LEVEL_TO_BUDGET), "off"]);
+const HYPHEN_EFFORT_PROVIDERS = new Set(["xai"]);
 
 
 // Helper functions
@@ -73,6 +77,18 @@ export function getModelType(aliasOrId, modelId) {
   return found?.kind || found?.type || null;
 }
 
+function applyHyphenThinkingEffort(aliasOrId, models, baseId, suffix) {
+  if (!HYPHEN_EFFORT_PROVIDERS.has(aliasOrId) || typeof baseId !== "string") return null;
+  const match = baseId.match(/^(.*)-([A-Za-z]+)$/);
+  if (!match) return null;
+  const effort = match[2].toLowerCase();
+  if (!THINKING_EFFORTS.has(effort)) return null;
+  const base = match[1];
+  if (!findModel(models, base, aliasOrId)) return null;
+  const normalized = effort === "off" ? "none" : effort;
+  return `${base}(${normalized})${suffix}`;
+}
+
 export function getModelUpstreamId(aliasOrId, modelId) {
   // Split off thinking suffix "(level)" so lookup hits the base id; re-append it to
   // the result so downstream applyThinking still sees the suffix (body.model is stripped separately).
@@ -81,6 +97,8 @@ export function getModelUpstreamId(aliasOrId, modelId) {
   const baseId = suffix ? modelId.slice(0, sufMatch.index).trim() : modelId;
   const models = PROVIDER_MODELS[aliasOrId];
   const found = findModel(models, baseId, aliasOrId);
+  const hyphenEffort = !found ? applyHyphenThinkingEffort(aliasOrId, models, baseId, suffix) : null;
+  if (hyphenEffort) return hyphenEffort;
   const resolvedId = found?.upstreamModelId || found?.id;
   if (resolvedId) {
     const presetMatch = resolvedId.match(/\([^()]+\)\s*$/);

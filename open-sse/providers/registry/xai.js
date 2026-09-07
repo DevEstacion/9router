@@ -1,3 +1,14 @@
+const XAI_REASONING_EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh"];
+
+function withEffortAliases({ id, name }) {
+  const label = (effort) => effort.charAt(0).toUpperCase() + effort.slice(1);
+  return XAI_REASONING_EFFORTS.map((effort) => ({
+    id: `${id}-${effort}`,
+    name: `${name} (${label(effort)})`,
+    upstreamModelId: `${id}(${effort})`,
+  }));
+}
+
 export default {
   id: "xai",
   priority: 280,
@@ -28,8 +39,9 @@ export default {
   },
   models: [
     { id: "grok-4.6", name: "Grok 4.6" },
-    { id: "grok-4.6-medium", name: "Grok 4.6 (Medium)", upstreamModelId: "grok-4.6(medium)" },
+    ...withEffortAliases({ id: "grok-4.6", name: "Grok 4.6" }),
     { id: "grok-4.5", name: "Grok 4.5" },
+    ...withEffortAliases({ id: "grok-4.5", name: "Grok 4.5" }),
     { id: "grok-4", name: "Grok 4" },
     { id: "grok-4-fast-reasoning", name: "Grok 4 Fast Reasoning" },
     { id: "grok-code-fast-1", name: "Grok Code Fast" },
