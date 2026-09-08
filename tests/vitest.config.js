@@ -5,6 +5,11 @@ import { fileURLToPath } from "url";
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
 export default defineConfig({
+  server: {
+    deps: {
+      inline: [/src/, /open-sse/, /@\//],
+    },
+  },
   test: {
     environment: "node",
     globals: true,

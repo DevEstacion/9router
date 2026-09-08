@@ -47,6 +47,13 @@ export const ANTIGRAVITY_CONFIG = {
   loadCodeAssistClientMetadata: JSON.stringify({ ideType: 9, platform: getOAuthPlatformEnum(), pluginType: 2 }),
 };
 
+// Antigravity CLI (`agy`) OAuth Configuration
+export const AGY_CONFIG = {
+  ...ANTIGRAVITY_OAUTH_CLIENT,
+  ...PROVIDER_OAUTH["agy"],
+  loadCodeAssistClientMetadata: JSON.stringify({ ideType: 9, platform: getOAuthPlatformEnum(), pluginType: 2 }),
+};
+
 /**
  * Get client metadata using numeric enum values for API calls.
  * @returns {{ ideType: number, platform: number, pluginType: number }}

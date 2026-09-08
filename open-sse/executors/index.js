@@ -28,6 +28,7 @@ import { DevinCliExecutor } from "./devin-cli.js";
 
 const executors = {
   antigravity: new AntigravityExecutor(),
+  agy: new AntigravityExecutor("agy"),
   azure: new AzureExecutor(),
   "gemini-cli": new GeminiCLIExecutor(),
   github: new GithubExecutor(),

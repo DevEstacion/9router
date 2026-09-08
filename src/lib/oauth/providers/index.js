@@ -10,6 +10,7 @@ import xai from "./xai.js";
 import grokCli from "./grok-cli.js";
 import geminiCli from "./gemini-cli.js";
 import antigravity from "./antigravity.js";
+import agy from "./agy.js";
 import iflow from "./iflow.js";
 import qoder from "./qoder.js";
 import github from "./github.js";
@@ -35,6 +36,7 @@ const PROVIDERS = {
   "grok-cli": grokCli,
   "gemini-cli": geminiCli,
   antigravity,
+  agy,
   iflow,
   qoder,
   github,
