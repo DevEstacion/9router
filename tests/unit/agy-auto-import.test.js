@@ -23,10 +23,20 @@ vi.mock("fs/promises", () => ({
   readFile: (...args) => mockReadFile(...args),
 }));
 
+// Mock child_process for keyring lookup tests
+const mockExecFileSync = vi.fn();
+vi.mock("child_process", () => ({
+  execFileSync: (...args) => mockExecFileSync(...args),
+}));
+
 describe("GET /api/oauth/agy/auto-import", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.AGY_TOKEN_FILE;
+    delete process.env.AGY_DISABLE_KEYRING;
+    mockExecFileSync.mockImplementation(() => {
+      throw new Error("No keyring entry");
+    });
   });
 
   it("extracts credentials from standard nested .token format", async () => {
@@ -96,19 +106,49 @@ describe("GET /api/oauth/agy/auto-import", () => {
     );
   });
 
-  it("returns found: false when token file does not exist", async () => {
+  it("extracts credentials from OS keyring when file does not exist", async () => {
     mockReadFile.mockRejectedValueOnce(new Error("ENOENT: no such file or directory"));
+    mockExecFileSync.mockReturnValueOnce(
+      JSON.stringify({
+        token: {
+          access_token: "keyring-access-token",
+          refresh_token: "keyring-refresh-token",
+          expiry: "2026-09-09T00:00:00.000Z",
+        },
+        auth_method: "consumer",
+      })
+    );
+
+    const { GET } = await import("../../src/app/api/oauth/agy/auto-import/route.js");
+    const res = await GET();
+    const data = await res.json();
+
+    expect(data.found).toBe(true);
+    expect(data.accessToken).toBe("keyring-access-token");
+    expect(data.refreshToken).toBe("keyring-refresh-token");
+    expect(data.expiresAt).toBe("2026-09-09T00:00:00.000Z");
+    expect(data.source).toContain("Secret Service");
+  });
+
+  it("returns found: false when neither file nor keyring contains credentials", async () => {
+    mockReadFile.mockRejectedValueOnce(new Error("ENOENT: no such file or directory"));
+    mockExecFileSync.mockImplementation(() => {
+      throw new Error("Secret not found");
+    });
 
     const { GET } = await import("../../src/app/api/oauth/agy/auto-import/route.js");
     const res = await GET();
     const data = await res.json();
 
     expect(data.found).toBe(false);
-    expect(data.error).toContain("Antigravity CLI token file not found");
+    expect(data.error).toContain("Antigravity CLI login not found in system keyring");
   });
 
-  it("returns found: false when JSON is malformed", async () => {
+  it("returns found: false when file JSON is malformed and keyring is empty", async () => {
     mockReadFile.mockResolvedValueOnce("not-json-content");
+    mockExecFileSync.mockImplementation(() => {
+      throw new Error("Secret not found");
+    });
 
     const { GET } = await import("../../src/app/api/oauth/agy/auto-import/route.js");
     const res = await GET();

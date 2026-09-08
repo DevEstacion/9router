@@ -198,7 +198,7 @@ export default function AgyAuthModal({ isOpen, providerInfo, onSuccess, onClose 
                   </span>
                 </div>
                 <p className="text-sm font-medium">Scanning for local Antigravity CLI credentials...</p>
-                <p className="text-xs text-text-muted">~/.gemini/antigravity-cli/antigravity-oauth-token</p>
+                <p className="text-xs text-text-muted">OS Keyring &amp; ~/.gemini/antigravity-cli</p>
               </div>
             )}
 
