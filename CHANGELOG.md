@@ -1,3 +1,14 @@
+# v0.5.70 (2026-09-08)
+
+## Features
+- **Antigravity CLI (agy)**: align traffic signature, user-agent (`aidev_client`), request labels (`last_step_index`, `model_enum`, `trajectory_id`, `request_id`, `used_claude`, `used_non_gemini_model`), and onboarding metadata with official `agy` client (v1.1.27, CL 976543523)
+- **Antigravity CLI (agy)**: auto-detect credentials directly from the operating system keyring (`service: gemini`, `username: antigravity` via DBus Secret Service on Linux and Keychain on macOS) with file fallback
+- **Antigravity CLI (agy)**: preserve `antigravity/cli/*` user agents in MITM proxy pass-through without overwriting with desktop version
+
+## Fixes
+- **Auth & Service**: execute `custom-server.js` wrapper under systemd (`9router.service`) and copy it in `run.sh` to reliably mint peer tokens and stamp TCP socket IP headers
+- **Dashboard Guard**: allow local auto-import endpoints (`/api/oauth/agy/auto-import`, `/api/oauth/cursor/auto-import`, `/api/oauth/kiro/auto-import`) on loopback under `requireLogin: false`
+
 # v0.5.69 (2026-09-05)
 
 ## Features

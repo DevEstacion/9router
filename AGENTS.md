@@ -77,6 +77,46 @@ Tests in `tests/unit/openai-to-claude.test.js`, `tests/translator/golden-respons
 
 If a future rebase drops ANY of these, the patch is broken — the synthetic `<block>no</block>` short-circuit is the entire feature.
 
+---
+
+# 9Router — Antigravity CLI (`agy`) Provider & Signature Alignment
+
+## What this does
+
+Antigravity CLI (`agy`) communicates with Google internal Code Assist endpoints using specific client metadata, request envelopes, and user-agent signatures. The `agy` provider in 9router allows routing traffic to Google Code Assist models using authentic `agy` signatures:
+
+1. **User-Agent**:
+   Formatted as `antigravity/cli/<version> (aidev_client; os_type=<os>; arch=<arch>; cl=<cl>; auth_method=consumer)`.
+   Constants defined in `open-sse/providers/shared.js` (`AGY_CLI_VERSION = "1.1.27"`, `AGY_CLI_CL = "976543523"`).
+2. **Request Envelope & Labels**:
+   `open-sse/executors/antigravity.js` injects authentic `labels` into `request` when provider is `agy`:
+   - `last_step_index`, `model_enum`, `request_id`, `trajectory_id`, `used_claude`, `used_non_gemini_model`.
+3. **Onboarding & Quota**:
+   - `loadCodeAssist`: sends `{"metadata": {"ideType": "ANTIGRAVITY"}}`.
+   - `retrieveUserQuotaSummary`: uses `project: "aicode-consumers"` without extraneous SDK headers.
+4. **MITM Pass-Through**:
+   `src/mitm/antigravityIdeVersion.js` preserves `antigravity/cli/*` user agents instead of rewriting to desktop version.
+5. **Credential Auto-Import via OS Keyring**:
+   `GET /api/oauth/agy/auto-import` extracts credentials directly from the system keyring:
+   - **Linux**: DBus Secret Service (`service: "gemini"`, `username: "antigravity"`) via `libsecret` / `secret-tool`.
+   - **macOS**: Keychain (`service: "gemini"`, `account: "antigravity"`) via `/usr/bin/security`.
+   - **Fallback**: Probes `AGY_TOKEN_FILE` or `~/.gemini/antigravity-cli/antigravity-oauth-token` when keyring is bypassed.
+
+## Runtime & Access Guard
+
+- `custom-server.js` must be the entry point executed by systemd (`9router.service`) to mint `NINEROUTER_PEER_TOKEN` and stamp `x-9r-peer-token` & `x-9r-real-ip`.
+- `/api/oauth/agy/auto-import` is registered in `LOCAL_ONLY_PATHS` (blocking non-loopback clients and CSRF) and excluded from `ALWAYS_PROTECTED` so local dashboard users can auto-detect tokens under `requireLogin: false`.
+
+## Tests
+
+- `tests/unit/agy-signature.test.js`: User-agent formatting, provider headers, OAuth metadata, request labels, and MITM pass-through.
+- `tests/unit/agy-provider-registry.test.js`: Provider registry, model mapping, executor resolution, and OAuth setup.
+- `tests/unit/agy-auto-import.test.js`: File extraction, keyring extraction, and fallback handling.
+- `tests/unit/agy-import.test.js`: Token import and persistence.
+- `tests/unit/dashboard-guard.test.js`: Loopback access under `requireLogin: false`.
+
+---
+
 ## Branching Workflow
 
 Three branches, three jobs — never mix them:

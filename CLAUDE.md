@@ -85,7 +85,8 @@ Pre-translate hooks that compress `tool_result` content in-place to cut tokens. 
 ## Conventions & gotchas
 
 - Plain JavaScript (ESM), no TypeScript. `@/*` path alias → `src/*` (`jsconfig.json`).
-- `custom-server.js` wraps the Next standalone server to derive client IP from the TCP socket and strip attacker-controlled `X-Forwarded-For` — trusting forwarding headers only from a loopback reverse proxy. Preserve this when touching request/IP/rate-limit code.
+- `custom-server.js` wraps the Next standalone server to derive client IP from the TCP socket and strip attacker-controlled `X-Forwarded-For` — trusting forwarding headers only from a loopback reverse proxy. It mints `NINEROUTER_PEER_TOKEN` to validate loopback requests in `dashboardGuard.js`. It must be executed as the server entry point (`npm start`, `run.sh`, systemd service).
+- Antigravity CLI (`agy`): 9router aligns outbound traffic signatures with official `agy` (`v1.1.27`, CL `976543523`, `aidev_client` UA, request labels). Token auto-import probes the OS Keyring (`service="gemini"`, `username="antigravity"`) via DBus Secret Service on Linux and Keychain on macOS with file fallback.
 - Security-sensitive env: `JWT_SECRET` (session cookie), `INITIAL_PASSWORD` (default `123456` — must override), `API_KEY_SECRET`, `MACHINE_ID_SALT`. Full env contract in `.env.example` and ARCHITECTURE.md's env matrix.
 - Binary/protobuf upstreams (kiro EventStream, cursor protobuf, commandcode NDJSON) don't round-trip through OpenAI — they're handled inside their own executor, not the translator.
 - Versioning: root and `cli/` are versioned independently; changes are logged in `CHANGELOG.md`. Commit style is Conventional Commits (`fix(translator): …`, `feat(...)`).
