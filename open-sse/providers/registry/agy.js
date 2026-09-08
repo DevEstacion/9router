@@ -1,6 +1,6 @@
-import { ANTIGRAVITY_IDE_BASE_URL, ANTIGRAVITY_OAUTH_CLIENT } from "../shared.js";
+import { ANTIGRAVITY_IDE_BASE_URL, ANTIGRAVITY_OAUTH_CLIENT, getAgyCliUserAgent } from "../shared.js";
 
-export const AGY_CLI_USER_AGENT = "antigravity/cli/1.1.0 linux/x64";
+export const AGY_CLI_USER_AGENT = getAgyCliUserAgent();
 
 export default {
   id: "agy",
@@ -37,19 +37,26 @@ export default {
       },
     },
     usage: {
-      quotaApiUrl: `${ANTIGRAVITY_IDE_BASE_URL}/v1internal:fetchAvailableModels`,
-      loadProjectApiUrl: "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist",
+      quotaApiUrl: `${ANTIGRAVITY_IDE_BASE_URL}/v1internal:retrieveUserQuotaSummary`,
+      loadProjectApiUrl: "https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist",
       tokenUrl: "https://oauth2.googleapis.com/token",
     },
     clientId: ANTIGRAVITY_OAUTH_CLIENT.clientId,
     clientSecret: ANTIGRAVITY_OAUTH_CLIENT.clientSecret,
   },
   models: [
+    { id: "gemini-3.8-flash-high", name: "Gemini 3.8 Flash (High)", upstreamModelId: "gemini-3.8-flash-tiered(high)" },
+    { id: "gemini-3.8-flash-medium", name: "Gemini 3.8 Flash (Medium)", upstreamModelId: "gemini-3.8-flash-tiered(medium)" },
+    { id: "gemini-3.8-flash-low", name: "Gemini 3.8 Flash (Low)", upstreamModelId: "gemini-3.8-flash-tiered(low)" },
     { id: "gemini-3.7-flash-high", name: "Gemini 3.7 Flash (High)", upstreamModelId: "gemini-3.7-flash-tiered(high)" },
     { id: "gemini-3.7-flash-medium", name: "Gemini 3.7 Flash (Medium)", upstreamModelId: "gemini-3.7-flash-tiered(medium)" },
     { id: "gemini-3.7-flash-low", name: "Gemini 3.7 Flash (Low)", upstreamModelId: "gemini-3.7-flash-tiered(low)" },
     { id: "gemini-3.7-flash-tiered", name: "Gemini 3.7 Flash (Tiered)", upstreamModelId: "gemini-3.7-flash-tiered(high)" },
+    { id: "gemini-3.6-flash-high", name: "Gemini 3.6 Flash (High)" },
+    { id: "gemini-3.6-flash-medium", name: "Gemini 3.6 Flash (Medium)" },
+    { id: "gemini-3.6-flash-low", name: "Gemini 3.6 Flash (Low)" },
     { id: "gemini-pro-agent", name: "Gemini 3.1 Pro (High)" },
+    { id: "gemini-3.1-pro-high", name: "Gemini 3.1 Pro (High)" },
     { id: "gemini-3.1-pro-low", name: "Gemini 3.1 Pro (Low)" },
     { id: "gemini-3.1-flash-lite", name: "Gemini 3.1 Flash Lite" },
     { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6 (Thinking)" },

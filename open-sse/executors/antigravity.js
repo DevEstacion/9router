@@ -113,6 +113,7 @@ function buildIdeRequestId({ body, request, credentials, model, requestType }) {
 export class AntigravityExecutor extends BaseExecutor {
   constructor(providerName = "antigravity") {
     super(providerName, PROVIDERS[providerName] || PROVIDERS.antigravity);
+    this.providerName = providerName;
   }
 
   buildUrl(model, stream, urlIndex = 0) {
@@ -289,6 +290,19 @@ export class AntigravityExecutor extends BaseExecutor {
       safetySettings: undefined,
       ...(tools?.length > 0 && { toolConfig: { functionCallingConfig: { mode: "VALIDATED" } } })
     };
+
+    if ((this.provider === "agy" || this.providerName === "agy") && !transformedRequest.labels) {
+      const trajUuid = uuidFromSeed(`antigravity:trajectory:${sessionId}:${model}`);
+      transformedRequest.labels = {
+        last_step_index: "0",
+        model_enum: "MODEL_PLACEHOLDER_M320",
+        request_id: `${trajUuid}-0`,
+        trajectory_id: trajUuid,
+        used_claude: String(/^claude/.test(model)),
+        used_claude_conservative: "false",
+        used_non_gemini_model: String(!model.startsWith("gemini")),
+      };
+    }
 
     // Strip blacklisted thinking fields from top-level body (set by thinkingUnified.js at root, not body.request)
     stripBlacklisted(body);

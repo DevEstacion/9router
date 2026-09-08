@@ -16,6 +16,7 @@ function shouldRewriteMetadata(metadata) {
 
 function rewriteAntigravityUserAgent(userAgent, version) {
   if (typeof userAgent !== "string" || !userAgent.includes("antigravity/")) return userAgent;
+  if (userAgent.includes("antigravity/cli/")) return userAgent;
   return userAgent.replace(/antigravity\/[^\s]+/, `antigravity/${version}`);
 }
 

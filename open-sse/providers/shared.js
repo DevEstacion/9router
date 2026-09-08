@@ -82,6 +82,16 @@ export const ANTIGRAVITY_IDE_VERSION = "2.11.0";
 export const ANTIGRAVITY_IDE_BASE_URL = "https://daily-cloudcode-pa.googleapis.com";
 export const ANTIGRAVITY_IDE_USER_AGENT = `antigravity/ide/${ANTIGRAVITY_IDE_VERSION} darwin/arm64`;
 
+// Official Antigravity CLI (agy) fingerprint captured from live agy session
+export const AGY_CLI_VERSION = "1.1.27";
+export const AGY_CLI_CL = "976543523";
+
+export function getAgyCliUserAgent() {
+  const os = platform() === "darwin" ? "darwin" : platform() === "win32" ? "windows" : "linux";
+  const a = arch() === "arm64" ? "arm64" : arch() === "x64" ? "amd64" : arch();
+  return `antigravity/cli/${AGY_CLI_VERSION} (aidev_client; os_type=${os}; arch=${a}; cl=${AGY_CLI_CL}; auth_method=consumer)`;
+}
+
 // Antigravity OAuth client credentials (public CLI client — duplicated in usage.js + src/lib/oauth)
 export const ANTIGRAVITY_OAUTH_CLIENT = {
   clientId: "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com",

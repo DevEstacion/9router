@@ -63,7 +63,7 @@ const agy = {
       const loadRes = await fetch(AGY_CONFIG.loadCodeAssistEndpoint, {
         method: "POST",
         headers: loadHeaders,
-        body: JSON.stringify({ metadata }),
+        body: AGY_CONFIG.loadCodeAssistClientMetadata,
       });
       if (loadRes.ok) {
         const data = await loadRes.json();

@@ -3,7 +3,7 @@
  */
 
 import { CLIENT_METADATA } from "../../config/appConstants.js";
-import { ANTIGRAVITY_IDE_USER_AGENT, ANTIGRAVITY_IDE_VERSION, ANTIGRAVITY_OAUTH_CLIENT } from "../../providers/shared.js";
+import { ANTIGRAVITY_IDE_USER_AGENT, ANTIGRAVITY_IDE_VERSION, ANTIGRAVITY_OAUTH_CLIENT, ANTIGRAVITY_IDE_BASE_URL, getAgyCliUserAgent } from "../../providers/shared.js";
 import { U, parseResetTime, normalizeCloudCodeProjectId, fetchWithTimeout } from "./shared.js";
 
 // Antigravity API config (from Quotio) — urls from registry, oauth client + dynamic UA kept here
@@ -243,5 +243,87 @@ async function getAntigravitySubscriptionInfo(accessToken, proxyOptions = null) 
   } catch (error) {
     console.error("[Antigravity Subscription] Error:", error.message);
     return null;
+  }
+}
+
+/**
+ * Antigravity CLI (agy) Usage - Fetch quota from retrieveUserQuotaSummary
+ * Matches authentic agy CLI request signature.
+ */
+export async function getAgyUsage(accessToken, providerSpecificData, proxyOptions = null) {
+  try {
+    const projectId = normalizeCloudCodeProjectId(providerSpecificData?.projectId) || "aicode-consumers";
+    const userAgent = getAgyCliUserAgent();
+
+    const response = await fetchWithTimeout(`${ANTIGRAVITY_IDE_BASE_URL}/v1internal:retrieveUserQuotaSummary`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "User-Agent": userAgent,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ project: projectId }),
+    }, 10000, proxyOptions);
+
+    if (response.status === 403) {
+      return { message: "Antigravity quota API access forbidden. Chat may still work.", quotas: {} };
+    }
+    if (response.status === 401) {
+      return { message: "Antigravity quota API authentication expired. Chat may still work.", quotas: {} };
+    }
+    if (!response.ok) {
+      throw new Error(`Antigravity API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const quotas = {};
+
+    const importantModels = [
+      "gemini-3.8-flash-high",
+      "gemini-3.8-flash-medium",
+      "gemini-3.8-flash-low",
+      "gemini-3.7-flash-high",
+      "gemini-3.7-flash-medium",
+      "gemini-3.7-flash-low",
+      "gemini-3.6-flash-high",
+      "gemini-3.6-flash-medium",
+      "gemini-3.6-flash-low",
+      "gemini-3.5-flash-low",
+      "gemini-3.5-flash-extra-low",
+      "gemini-pro-agent",
+      "gemini-3.1-pro-high",
+      "gemini-3.1-pro-low",
+      "claude-sonnet-4-6",
+      "claude-opus-4-6-thinking",
+      "gpt-oss-120b-medium",
+      "gemini-3.1-flash-image",
+    ];
+
+    if (data.models) {
+      for (const [modelKey, info] of Object.entries(data.models)) {
+        if (!info.quotaInfo || info.isInternal || !importantModels.includes(modelKey)) continue;
+        const remainingFraction = info.quotaInfo.remainingFraction || 0;
+        const remainingPercentage = remainingFraction * 100;
+        const total = 1000;
+        const remaining = Math.round(total * remainingFraction);
+        const used = total - remaining;
+        quotas[modelKey] = {
+          used,
+          total,
+          resetAt: parseResetTime(info.quotaInfo.resetTime),
+          remainingPercentage,
+          unlimited: false,
+          displayName: info.displayName || modelKey,
+        };
+      }
+    }
+
+    return {
+      plan: providerSpecificData?.tierId || "Standard",
+      quotas,
+    };
+  } catch (error) {
+    console.error("[Agy Usage] Error:", error.message, error.cause);
+    return { message: `Agy error: ${error.message}` };
   }
 }
