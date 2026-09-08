@@ -8,7 +8,7 @@ Type=simple
 WorkingDirectory=/home/ron/Documents/Projects/9router/.next-cli-build/standalone/9router
 EnvironmentFile=/home/ron/Documents/Projects/9router/.env
 Environment=PATH=/home/ron/.nvm/versions/node/v25.6.0/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=/home/ron/.nvm/versions/node/v25.6.0/bin/node server.js
+ExecStart=/home/ron/.nvm/versions/node/v25.6.0/bin/node custom-server.js
 Restart=always
 RestartSec=5
 StartLimitBurst=0

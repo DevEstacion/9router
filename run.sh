@@ -76,7 +76,7 @@ else
   exit 1
 fi
 
-log "3/6 Syncing public folder (favicon, provider icons, i18n, sw.js)..."
+log "3/6 Syncing public folder and custom-server wrapper..."
 if [ -d "$CLI_PUBLIC_DIR" ]; then
   mkdir -p "$SERVICE_PUBLIC_DIR"
   cp -r "$CLI_PUBLIC_DIR"/. "$SERVICE_PUBLIC_DIR"/
@@ -84,6 +84,10 @@ if [ -d "$CLI_PUBLIC_DIR" ]; then
   log "  copied: $CLI_PUBLIC_DIR → $SERVICE_PUBLIC_DIR ($COUNT files)"
 else
   warn "  no public dir at $CLI_PUBLIC_DIR (continuing without — icons may 404)"
+fi
+if [ -f "$REPO_ROOT/custom-server.js" ]; then
+  cp "$REPO_ROOT/custom-server.js" "$SERVICE_ROOT/custom-server.js"
+  log "  copied: custom-server.js → $SERVICE_ROOT/custom-server.js"
 fi
 
 log "4/6 Killing any lingering 9router processes (SIGKILL)..."

@@ -28,7 +28,7 @@ export async function GET() {
     } catch (err) {
       return NextResponse.json({
         found: false,
-        error: `Antigravity CLI token file not found at ${tokenPath}. Please run agy and sign in first.`,
+        error: `Antigravity CLI token file not found at ${tokenPath}. Please run agy and sign in first, or use the "Paste Token" or "Browser OAuth" tab.`,
       });
     }
 

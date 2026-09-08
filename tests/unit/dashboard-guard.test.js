@@ -256,6 +256,17 @@ describe("dashboard guard local-only access", () => {
     expect(response).toBe(mocks.nextResponse);
   });
 
+  it("allows agy auto-import on loopback when requireLogin=false", async () => {
+    mocks.getSettings.mockResolvedValue({ requireLogin: false });
+
+    const response = await proxy(localRequest("/api/oauth/agy/auto-import", {
+      host: "localhost:20128",
+      origin: "http://localhost:20128",
+    }));
+
+    expect(response).toBe(mocks.nextResponse);
+  });
+
   it("rejects local-only route from tunnel host even when requireLogin=false", async () => {
     mocks.getSettings.mockResolvedValue({ requireLogin: false });
 
