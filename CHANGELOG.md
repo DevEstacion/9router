@@ -8,8 +8,12 @@
 - **OpenCode Go**: add newly published models (glm-5.3, kimi-k3, deepseek-flash, longcat-2.0, hy4-preview, hy3 on chat/completions; qwen3.8-max, qwen3.8-flash on `/messages`; grok-4.6, gpt-5.6-luna on Responses) and list `deepseek-v4.1-flash` first in the catalog
 - **CLI tools**: group the model selector by provider with full-text search and manual custom model ID entry
 - **CodeBuddy-CN**: replace `deepseek-v4-flash` with `deepseek-v4.1-flash`
+- **Claude Code Classifier Compat**: add auto-mode classifier default-allow short-circuit (`off`, `auto`, `always`) returning synthetic `<block>no</block>` to prevent fail-closed blocks on combo fallbacks; accessible UI controls in ClaudeToolCard and CLI settings confirmation
+- **Multimodal**: add Sharp-based image normalization converting bulky inline images to JPEG while preserving alpha channels, plus historical image pruning after assistant turns
 
 ## Fixes
+- **Codex**: parse SSE error events structurally to prevent assistant output mentioning context limits from being misclassified as upstream 400 errors
+- **Instrumentation**: merge Headroom auto-start proxy into `src/instrumentation.js` preserving console log capture and model catalog sync hooks
 - **Tools**: scope Claude tool type defaulting to gateways declaring `requireClaudeToolType` — the global default broke Anthropic-compatible endpoints that only accept the legacy typeless tool shape (#3905)
 - **Claude**: cap re-anchored `cache_control` at the 4-marker budget so a spent budget no longer 400s and triggers a full combo failover; wrap bare single-object content turns before the mid-conversation-system fold
 - **Cline / Airforce**: unwrap the `{"success":true,"data":…}` envelope on non-stream chat completions (#3644); add the live Cline/ClinePass model catalog and refresh Airforce free models

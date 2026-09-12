@@ -49,8 +49,9 @@ async function showSettingsMenu(breadcrumb = []) {
 
       // Claude classifier compat section
       const classifierMode = data?.settings?.claudeClassifierCompat || "off";
-      const classifierColor = classifierMode === "off" ? COLORS.red : classifierMode === "auto" ? COLORS.yellow : COLORS.green;
-      lines.push(`  Classifier: ${classifierColor}${classifierMode.toUpperCase()}${COLORS.reset} ${COLORS.dim}(Claude compat mode)${COLORS.reset}`);
+      const classifierColor = classifierMode === "auto" ? COLORS.yellow : COLORS.red;
+      const classifierHelp = classifierMode === "always" ? "DANGEROUS: allows every classifier request" : "Claude compat mode";
+      lines.push(`  Classifier: ${classifierColor}${classifierMode.toUpperCase()}${COLORS.reset} ${COLORS.dim}(${classifierHelp})${COLORS.reset}`);
 
       return lines.join("\n");
     },
@@ -197,6 +198,18 @@ const CLASSIFIER_COMPAT_MODES = ["off", "auto", "always"];
 async function cycleClassifierCompat(currentMode) {
   const idx = CLASSIFIER_COMPAT_MODES.indexOf(currentMode);
   const next = CLASSIFIER_COMPAT_MODES[(idx === -1 ? 0 : (idx + 1) % CLASSIFIER_COMPAT_MODES.length)];
+
+  if (next === "always") {
+    console.log(`${COLORS.red}WARNING: ALWAYS is dangerous.${COLORS.reset}`);
+    console.log("It allows every Claude-format classifier request without calling the upstream model.");
+    const approved = await confirm("Enable ALWAYS only because you trust every action?");
+    if (!approved) {
+      showStatus("Classifier mode unchanged", "info");
+      await pause();
+      return;
+    }
+  }
+
   const result = await api.updateSettings({ claudeClassifierCompat: next });
   if (result.success) {
     showStatus(`Claude classifier compat set to ${next}`, "success");

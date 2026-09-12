@@ -58,14 +58,6 @@ export async function handleChat(request, clientRawRequest = null) {
   if (contextMarker) body.model = modelStr;
 
   const sourceFormat = detectFormatByEndpoint(new URL(request.url).pathname, body) || detectFormat(body);
-  const inlineImageStats = await normalizeInlineImages(body, sourceFormat);
-  if (inlineImageStats.converted > 0) {
-    log.info("CONTEXT", `normalized ${inlineImageStats.converted} inline image(s), preserved alpha=${inlineImageStats.preservedAlpha}, saved ${inlineImageStats.savedBytes} bytes`);
-  }
-  const staleImageStats = pruneHistoricalInlineImages(body, sourceFormat);
-  if (staleImageStats.removed > 0) {
-    log.info("CONTEXT", `omitted ${staleImageStats.removed} historical inline image(s), saved ${staleImageStats.savedChars} chars`);
-  }
 
   // Request summary is emitted as the unified "▶" line in chatCore (has fmt/thinking/account)
 
@@ -102,6 +94,15 @@ export async function handleChat(request, clientRawRequest = null) {
   const userAgent = request?.headers?.get("user-agent") || "";
   const bypassResponse = handleBypassRequest(body, modelStr, userAgent, !!settings.ccFilterNaming);
   if (bypassResponse) return bypassResponse.response || bypassResponse;
+
+  const inlineImageStats = await normalizeInlineImages(body, sourceFormat);
+  if (inlineImageStats.converted > 0) {
+    log.info("CONTEXT", `normalized ${inlineImageStats.converted} inline image(s), preserved alpha=${inlineImageStats.preservedAlpha}, saved ${inlineImageStats.savedBytes} bytes`);
+  }
+  const staleImageStats = pruneHistoricalInlineImages(body, sourceFormat);
+  if (staleImageStats.removed > 0) {
+    log.info("CONTEXT", `omitted ${staleImageStats.removed} historical inline image(s), saved ${staleImageStats.savedChars} chars`);
+  }
 
   const requiredCapabilities = detectRequiredCapabilities(body);
 
@@ -147,7 +148,9 @@ export async function handleChat(request, clientRawRequest = null) {
       log,
       comboName: modelStr,
       comboStrategy,
-      comboStickyLimit
+      comboStickyLimit,
+      sourceFormat,
+      stream: body.stream !== false
     });
   }
 
@@ -166,7 +169,9 @@ export async function handleChat(request, clientRawRequest = null) {
       ),
       log,
       comboName: modelStr,
-      comboStrategy: getActiveAdapterStrategy(requiredCapabilities, settings)
+      comboStrategy: getActiveAdapterStrategy(requiredCapabilities, settings),
+      sourceFormat,
+      stream: body.stream !== false
     });
   }
 
@@ -213,6 +218,9 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       }
 
       const comboStickyLimit = chatSettings.comboStickyRoundRobinLimit;
+      const sourceFormat = request?.url
+        ? detectFormatByEndpoint(new URL(request.url).pathname, body) || detectFormat(body)
+        : detectFormat(body);
       log.info("CHAT", `Combo "${modelStr}" with ${augmentedModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`);
       return handleComboChat({
         body,
@@ -224,7 +232,9 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
         log,
         comboName: modelStr,
         comboStrategy,
-        comboStickyLimit
+        comboStickyLimit,
+        sourceFormat,
+        stream: body.stream !== false
       });
     }
     log.warn("CHAT", "Invalid model format", { model: modelStr });

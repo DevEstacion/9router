@@ -83,17 +83,30 @@ const has9RouterConfig = (config) => {
   return config.includes("model_provider = \"9router\"") || config.includes("[model_providers.9router]");
 };
 
-const isCodexGpt56 = (model) => /gpt-5\.6-(sol|terra|luna)/.test(model || "");
+const isCodexGpt56 = (model) => /^(?:[^/]+\/)?gpt-5\.6-(?:sol|terra|luna)(?:-(?:review|none|minimal|low|medium|high|xhigh|max))*$/.test(model || "");
 
 const applyCodexGpt56Window = (parsed, model) => {
-  if (isCodexGpt56(model)) {
-    parsed.model_context_window = CODEX_GPT_56_CONTEXT_WINDOW;
-    parsed.model_auto_compact_token_limit = CODEX_GPT_56_COMPACT_TOKEN_LIMIT;
-    return;
-  }
-  delete parsed.model_context_window;
-  delete parsed.model_auto_compact_token_limit;
+  if (!isCodexGpt56(model)) return;
+  parsed.model_context_window = CODEX_GPT_56_CONTEXT_WINDOW;
+  parsed.model_auto_compact_token_limit = CODEX_GPT_56_COMPACT_TOKEN_LIMIT;
 };
+
+const removeManagedCodexGpt56Window = (parsed) => {
+  if (parsed.model_context_window === CODEX_GPT_56_CONTEXT_WINDOW) {
+    delete parsed.model_context_window;
+  }
+  if (parsed.model_auto_compact_token_limit === CODEX_GPT_56_COMPACT_TOKEN_LIMIT) {
+    delete parsed.model_auto_compact_token_limit;
+  }
+};
+
+const writeConfig = async (configPath, parsed) => {
+  const tempPath = `${configPath}.${process.pid}.tmp`;
+  await fs.writeFile(tempPath, stringifyTOML(parsed), { mode: 0o600 });
+  await fs.rename(tempPath, configPath);
+};
+
+export const __test__ = { isCodexGpt56, applyCodexGpt56Window, removeManagedCodexGpt56Window };
 
 // GET - Check codex CLI and read current settings
 export async function GET() {
@@ -164,9 +177,8 @@ export async function POST(request) {
     deleteNestedSection(parsed, "agents.subagent");
     setNestedSection(parsed, "agents.default_subagent_model", subagentModel || model);
 
-    // Write merged config
-    const configContent = stringifyTOML(parsed);
-    await fs.writeFile(configPath, configContent);
+    // Write merged config atomically so interrupted updates cannot truncate user settings.
+    await writeConfig(configPath, parsed);
 
     return NextResponse.json({
       success: true,
@@ -203,8 +215,7 @@ export async function DELETE() {
     if (parsed.model_provider === "9router") {
       delete parsed.model;
       delete parsed.model_provider;
-      delete parsed.model_context_window;
-      delete parsed.model_auto_compact_token_limit;
+      removeManagedCodexGpt56Window(parsed);
     }
 
     // Remove 9router provider section
@@ -214,9 +225,8 @@ export async function DELETE() {
     deleteNestedSection(parsed, "agents.default_subagent_model");
     deleteNestedSection(parsed, "agents.subagent");
 
-    // Write updated config
-    const configContent = stringifyTOML(parsed);
-    await fs.writeFile(configPath, configContent);
+    // Write updated config atomically.
+    await writeConfig(configPath, parsed);
 
     // Remove OPENAI_API_KEY from auth.json
     const authPath = getCodexAuthPath();

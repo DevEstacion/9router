@@ -107,13 +107,36 @@ function parseTokenData(rawContent, source) {
     return { error: "Antigravity CLI token contains invalid JSON." };
   }
 
-  const token = parsed && typeof parsed.token === "object" && parsed.token !== null
-    ? parsed.token
-    : parsed;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return { error: "Antigravity CLI token must be a JSON object." };
+  }
+  if (parsed.token !== undefined && (!parsed.token || typeof parsed.token !== "object" || Array.isArray(parsed.token))) {
+    return { error: "Antigravity CLI token.token must be a JSON object." };
+  }
 
-  const accessToken = token?.access_token || null;
-  const refreshToken = token?.refresh_token || null;
-  const expiresAt = token?.expiry || token?.expires_at || null;
+  const token = parsed.token || parsed;
+  for (const field of ["access_token", "refresh_token"]) {
+    if (token[field] !== undefined && token[field] !== null && typeof token[field] !== "string") {
+      return { error: `Antigravity CLI token ${field} must be a string.` };
+    }
+  }
+
+  const accessToken = token.access_token?.trim() || null;
+  const refreshToken = token.refresh_token?.trim() || null;
+  const rawExpiresAt = token.expiry ?? token.expires_at ?? null;
+  let expiresAt = null;
+  if (rawExpiresAt !== null) {
+    if (typeof rawExpiresAt !== "string" && typeof rawExpiresAt !== "number") {
+      return { error: "Antigravity CLI token expiry must be a valid date." };
+    }
+    const expiryDate = typeof rawExpiresAt === "number"
+      ? new Date(rawExpiresAt < 1e12 ? rawExpiresAt * 1000 : rawExpiresAt)
+      : new Date(rawExpiresAt);
+    if (!Number.isFinite(expiryDate.getTime())) {
+      return { error: "Antigravity CLI token expiry must be a valid date." };
+    }
+    expiresAt = typeof rawExpiresAt === "string" ? rawExpiresAt : expiryDate.toISOString();
+  }
 
   if (!refreshToken && !accessToken) {
     return { error: "No access_token or refresh_token found in Antigravity CLI token." };
@@ -138,6 +161,8 @@ function parseTokenData(rawContent, source) {
 export async function GET() {
   try {
     const tokenPath = getAgyTokenFilePath();
+    const explicitTokenPath = Boolean(process.env.AGY_TOKEN_FILE?.trim());
+    let fileError = null;
 
     // 1. Check file storage first (explicit override or file fallback)
     try {
@@ -146,14 +171,21 @@ export async function GET() {
       if (parsed.found) {
         return NextResponse.json(parsed);
       }
-      if (parsed.error) {
-        return NextResponse.json({ found: false, error: parsed.error });
+      fileError = parsed.error || null;
+      if (explicitTokenPath && fileError) {
+        return NextResponse.json({ found: false, error: fileError });
       }
     } catch (err) {
-      // File does not exist; proceed to keyring lookup
+      if (explicitTokenPath) {
+        return NextResponse.json({
+          found: false,
+          error: `Failed to read AGY_TOKEN_FILE at ${tokenPath}: ${err.message}`,
+        });
+      }
     }
 
     // 2. Check OS Keyring (where official agy stores credentials by default)
+    let keyringError = null;
     try {
       const keyringData = extractFromKeyring();
       if (keyringData && keyringData.raw) {
@@ -161,6 +193,7 @@ export async function GET() {
         if (parsed.found) {
           return NextResponse.json(parsed);
         }
+        keyringError = parsed.error || null;
       }
     } catch (keyringErr) {
       console.warn("Failed to check keyring for agy token:", keyringErr);
@@ -169,7 +202,7 @@ export async function GET() {
     // 3. Neither file nor keyring found credentials
     return NextResponse.json({
       found: false,
-      error: `Antigravity CLI login not found in system keyring or at ${tokenPath}. Please run agy and sign in first, or use the "Paste Token" or "Browser OAuth" tab.`,
+      error: fileError || keyringError || `Antigravity CLI login not found in system keyring or at ${tokenPath}. Please run agy and sign in first, or use the "Paste Token" or "Browser OAuth" tab.`,
     });
   } catch (error) {
     console.error("Antigravity CLI auto-import error:", error);

@@ -406,11 +406,6 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     if (log?.errorLine) {
       log.errorLine(reqTag, "✗", `ERROR 502 · ${provider}/${model} · ${Date.now() - requestStartTime}ms\n    ${errMsg}${error.stack ? `\n    ${error.stack}` : ""}`);
     }
-    if (shouldDefaultAllowClassifier(sourceFormat, body, claudeClassifierCompat)) {
-      log?.warn?.("CHAT", `classifier upstream unavailable, default-allowing: ${errMsg}`);
-      streamController.handleComplete();
-      return buildDefaultAllowClaudeMessage();
-    }
     return createErrorResult(HTTP_STATUS.BAD_GATEWAY, errMsg);
   }
 
@@ -483,15 +478,10 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
       log.errorLine(reqTag, "✗", `ERROR ${statusCode} · ${provider}/${model} · ${Date.now() - requestStartTime}ms${urlStr}\n    ${errMsg}`);
     }
     reqLogger.logError(new Error(message), finalBody || translatedBody);
-    if (shouldDefaultAllowClassifier(sourceFormat, body, claudeClassifierCompat)) {
-      log?.warn?.("CHAT", `classifier upstream returned error, default-allowing: ${errMsg}`);
-      streamController.handleComplete();
-      return buildDefaultAllowClaudeMessage();
-    }
     return createErrorResult(statusCode, errMsg, resetsAtMs);
   }
 
-  const sharedCtx = { provider, model, body, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, clientRawRequest, onRequestSuccess, pxpipe: pxpipeSummary, reqTag, log, claudeClassifierCompat };
+  const sharedCtx = { provider, model, body, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, clientRawRequest, onRequestSuccess, pxpipe: pxpipeSummary, reqTag, log };
   const appendLog = (extra) => appendRequestLog({ model, provider, connectionId, ...extra }).catch(() => { });
   const trackDone = () => trackPendingRequest(model, provider, connectionId, false);
 

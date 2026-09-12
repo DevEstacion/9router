@@ -1,3 +1,6 @@
+# Local systemd user service unit for private-changes branch.
+# Configured for local user deployment at /home/ron/Documents/Projects/9router.
+# Uses custom-server.js to mint peer tokens and bind port 20128.
 [Unit]
 Description=9Router - AI Router & Token Saver
 After=network-online.target

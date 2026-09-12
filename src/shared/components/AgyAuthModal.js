@@ -23,15 +23,28 @@ export default function AgyAuthModal({ isOpen, providerInfo, onSuccess, onClose 
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState(null);
 
-  const runAutoDetect = async () => {
+  const clearTransientState = () => {
+    setAuthMode("auto");
+    setAutoDetecting(false);
+    setAutoDetected(false);
+    setAutoDetectError(null);
+    setDetectedToken(null);
+    setRawJson("");
+    setCustomName("");
+    setImporting(false);
+    setImportError(null);
+  };
+
+  const runAutoDetect = async (signal) => {
     setAutoDetecting(true);
     setAutoDetectError(null);
     setAutoDetected(false);
     setDetectedToken(null);
 
     try {
-      const res = await fetch("/api/oauth/agy/auto-import");
+      const res = await fetch("/api/oauth/agy/auto-import", { signal });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not auto-detect Antigravity CLI login.");
 
       if (data.found) {
         setDetectedToken(data);
@@ -39,20 +52,30 @@ export default function AgyAuthModal({ isOpen, providerInfo, onSuccess, onClose 
       } else {
         setAutoDetectError(data.error || "Could not auto-detect Antigravity CLI login.");
       }
-    } catch (err) {
-      setAutoDetectError("Failed to check local Antigravity CLI installation.");
+    } catch (error) {
+      if (error.name !== "AbortError") {
+        setAutoDetectError(error.message || "Failed to check local Antigravity CLI installation.");
+      }
     } finally {
-      setAutoDetecting(false);
+      if (!signal?.aborted) setAutoDetecting(false);
     }
   };
 
   useEffect(() => {
-    if (isOpen) {
-      setAuthMode("auto");
-      setImportError(null);
-      runAutoDetect();
-    }
+    if (!isOpen) return;
+    const controller = new AbortController();
+    queueMicrotask(() => {
+      if (!controller.signal.aborted) {
+        runAutoDetect(controller.signal);
+      }
+    });
+    return () => controller.abort();
   }, [isOpen]);
+
+  const handleClose = () => {
+    clearTransientState();
+    onClose();
+  };
 
   const handleImportDetected = async () => {
     if (!detectedToken) return;
@@ -77,7 +100,7 @@ export default function AgyAuthModal({ isOpen, providerInfo, onSuccess, onClose 
       }
 
       onSuccess?.();
-      onClose();
+      handleClose();
     } catch (err) {
       setImportError(err.message);
     } finally {
@@ -116,7 +139,7 @@ export default function AgyAuthModal({ isOpen, providerInfo, onSuccess, onClose 
       }
 
       onSuccess?.();
-      onClose();
+      handleClose();
     } catch (err) {
       setImportError(err.message);
     } finally {
@@ -132,20 +155,22 @@ export default function AgyAuthModal({ isOpen, providerInfo, onSuccess, onClose 
         providerInfo={providerInfo}
         onSuccess={() => {
           onSuccess?.();
-          onClose();
+          handleClose();
         }}
-        onClose={onClose}
+        onClose={() => setAuthMode("auto")}
       />
     );
   }
 
   return (
-    <Modal isOpen={isOpen} title="Connect Antigravity CLI (agy)" onClose={onClose}>
+    <Modal isOpen={isOpen} title="Connect Antigravity CLI (agy)" onClose={handleClose}>
       <div className="flex flex-col gap-4">
         {/* Navigation tabs */}
-        <div className="flex border-b border-border text-sm">
+        <div className="flex border-b border-border text-sm" role="tablist" aria-label="Antigravity authentication method">
           <button
             type="button"
+            role="tab"
+            aria-selected={authMode === "auto"}
             className={`px-4 py-2 font-medium border-b-2 transition-colors ${
               authMode === "auto"
                 ? "border-primary text-primary"
@@ -157,6 +182,8 @@ export default function AgyAuthModal({ isOpen, providerInfo, onSuccess, onClose 
           </button>
           <button
             type="button"
+            role="tab"
+            aria-selected={authMode === "paste"}
             className={`px-4 py-2 font-medium border-b-2 transition-colors ${
               authMode === "paste"
                 ? "border-primary text-primary"
@@ -168,6 +195,8 @@ export default function AgyAuthModal({ isOpen, providerInfo, onSuccess, onClose 
           </button>
           <button
             type="button"
+            role="tab"
+            aria-selected={authMode === "oauth"}
             className={`px-4 py-2 font-medium border-b-2 transition-colors ${
               authMode === "oauth"
                 ? "border-primary text-primary"
@@ -191,7 +220,7 @@ export default function AgyAuthModal({ isOpen, providerInfo, onSuccess, onClose 
         {authMode === "auto" && (
           <div className="flex flex-col gap-3">
             {autoDetecting && (
-              <div className="text-center py-6">
+              <div className="text-center py-6" role="status" aria-live="polite">
                 <div className="size-12 mx-auto mb-3 rounded-full bg-primary/10 flex items-center justify-center">
                   <span className="material-symbols-outlined text-2xl text-primary animate-spin">
                     progress_activity
@@ -203,7 +232,7 @@ export default function AgyAuthModal({ isOpen, providerInfo, onSuccess, onClose 
             )}
 
             {!autoDetecting && autoDetected && (
-              <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-200 dark:border-green-800 flex flex-col gap-2">
+              <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-200 dark:border-green-800 flex flex-col gap-2" role="status" aria-live="polite">
                 <div className="flex items-center gap-2 text-green-800 dark:text-green-200 text-sm font-medium">
                   <span className="material-symbols-outlined text-green-600 dark:text-green-400 text-base">check_circle</span>
                   Local Antigravity CLI credentials found!
@@ -221,7 +250,7 @@ export default function AgyAuthModal({ isOpen, providerInfo, onSuccess, onClose 
             )}
 
             {!autoDetecting && !autoDetected && (
-              <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-200 dark:border-amber-800 flex flex-col gap-3">
+              <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-200 dark:border-amber-800 flex flex-col gap-3" role={autoDetectError ? "alert" : "status"} aria-live={autoDetectError ? "assertive" : "polite"}>
                 <div className="flex items-start gap-2 text-amber-800 dark:text-amber-200 text-xs">
                   <span className="material-symbols-outlined text-amber-600 dark:text-amber-400 text-base shrink-0">info</span>
                   <div>
@@ -230,7 +259,7 @@ export default function AgyAuthModal({ isOpen, providerInfo, onSuccess, onClose 
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={runAutoDetect}>
+                  <Button variant="outline" size="sm" onClick={() => runAutoDetect()}>
                     Retry Scan
                   </Button>
                   <Button variant="secondary" size="sm" onClick={() => setAuthMode("paste")}>
@@ -245,14 +274,17 @@ export default function AgyAuthModal({ isOpen, providerInfo, onSuccess, onClose 
         {/* Paste Mode */}
         {authMode === "paste" && (
           <div className="flex flex-col gap-3">
-            <div className="text-xs text-text-muted">
+            <div id="agy-token-help" className="text-xs text-text-muted">
               Paste the contents of your <code>antigravity-oauth-token</code> file or raw refresh token:
             </div>
+            <label htmlFor="agy-token-input" className="text-xs font-medium text-text-main">Token JSON or refresh token</label>
             <textarea
+              id="agy-token-input"
               className="w-full h-32 p-2 text-xs font-mono rounded border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary"
               placeholder='{"token":{"access_token":"...","refresh_token":"..."}}'
               value={rawJson}
               onChange={(e) => setRawJson(e.target.value)}
+              aria-describedby="agy-token-help"
             />
             <Button
               variant="primary"
@@ -266,7 +298,7 @@ export default function AgyAuthModal({ isOpen, providerInfo, onSuccess, onClose 
         )}
 
         {importError && (
-          <div className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-200 dark:border-red-800">
+          <div role="alert" aria-live="assertive" className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-200 dark:border-red-800">
             {importError}
           </div>
         )}

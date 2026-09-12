@@ -32,6 +32,8 @@ vi.mock("child_process", () => ({
 describe("GET /api/oauth/agy/auto-import", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockReadFile.mockReset();
+    mockExecFileSync.mockReset();
     delete process.env.AGY_TOKEN_FILE;
     delete process.env.AGY_DISABLE_KEYRING;
     mockExecFileSync.mockImplementation(() => {
@@ -144,7 +146,56 @@ describe("GET /api/oauth/agy/auto-import", () => {
     expect(data.error).toContain("Antigravity CLI login not found in system keyring");
   });
 
-  it("returns found: false when file JSON is malformed and keyring is empty", async () => {
+  it("uses valid keyring credentials when the default token file is malformed", async () => {
+    mockReadFile.mockResolvedValueOnce("not-json-content");
+    mockExecFileSync.mockReturnValueOnce(JSON.stringify({
+      token: {
+        access_token: "keyring-access-token",
+        refresh_token: "keyring-refresh-token",
+      },
+    }));
+
+    const { GET } = await import("../../src/app/api/oauth/agy/auto-import/route.js");
+    const res = await GET();
+    const data = await res.json();
+
+    expect(data.found).toBe(true);
+    expect(data.accessToken).toBe("keyring-access-token");
+    expect(data.source).toContain("Secret Service");
+  });
+
+  it("keeps an invalid explicit AGY_TOKEN_FILE authoritative", async () => {
+    process.env.AGY_TOKEN_FILE = "/explicit/broken-token";
+    mockReadFile.mockResolvedValueOnce("not-json-content");
+    mockExecFileSync.mockReturnValueOnce(JSON.stringify({ access_token: "keyring-token" }));
+
+    const { GET } = await import("../../src/app/api/oauth/agy/auto-import/route.js");
+    const res = await GET();
+    const data = await res.json();
+
+    expect(data.found).toBe(false);
+    expect(data.error).toContain("invalid JSON");
+    expect(mockExecFileSync).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [{ token: { access_token: { value: "bad" } } }, "access_token must be a string"],
+    [{ token: { refresh_token: ["bad"] } }, "refresh_token must be a string"],
+    [{ token: { access_token: "token", expiry: "not-a-date" } }, "expiry must be a valid date"],
+    [{ token: "not-an-object" }, "token.token must be a JSON object"],
+  ])("rejects invalid nested token data %#", async (tokenData, expectedError) => {
+    process.env.AGY_DISABLE_KEYRING = "1";
+    mockReadFile.mockResolvedValueOnce(JSON.stringify(tokenData));
+
+    const { GET } = await import("../../src/app/api/oauth/agy/auto-import/route.js");
+    const res = await GET();
+    const data = await res.json();
+
+    expect(data.found).toBe(false);
+    expect(data.error).toContain(expectedError);
+  });
+
+  it("returns the malformed default file error when keyring is empty", async () => {
     mockReadFile.mockResolvedValueOnce("not-json-content");
     mockExecFileSync.mockImplementation(() => {
       throw new Error("Secret not found");

@@ -19,7 +19,7 @@ describe("chat.js does not override the user-chosen auto combo model", () => {
   );
 
   it("keeps modelStr as the original body.model field", () => {
-    const assignment = src.match(/const modelStr = body\.model;/);
+    const assignment = src.match(/const (?:modelStr = body\.model|\{\s*model:\s*modelStr[^\}]*\}\s*=\s*stripModelContextMarker\(body\.model\));/);
     expect(assignment).toBeTruthy();
   });
 

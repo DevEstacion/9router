@@ -13,7 +13,7 @@ The user's auto-combo is preserved — 9router does not touch model selection.
 - Key: `claudeClassifierCompat`
 - Default: `"off"`
 - Values: `"off"` | `"auto"` | `"always"`
-- Storage: `src/lib/db/repos/settingsRepo.js:45`
+- Storage: `src/lib/db/repos/settingsRepo.js`
 - API: `GET/PATCH /api/settings`
 
 `auto` auto-detects the classifier by checking the request body for:
@@ -36,16 +36,16 @@ src/sse/handlers/chat.js
 
 ## UI
 
-- Dashboard: `src/app/(dashboard)/dashboard/token-saver/TokenSaverClient.js` — `SegmentedControl` with Off / Auto / Always
-- CLI menu: `cli/src/cli/menus/settings.js` — cycles the three modes
+- Dashboard: `src/app/(dashboard)/dashboard/cli-tools/components/ClaudeToolCard.js` — explicit controls for Off / Auto / Always (dangerous) with confirmation before Always
+- CLI menu: `cli/src/cli/menus/settings.js` — cycles modes with warning and confirmation before Always
 
 ## Tests
 
-- `tests/unit/openai-to-claude.test.js` — 4 compat-mode cases (suppress thinking / preserve text / preserve tool_use / mixed)
+- `tests/unit/openai-to-claude.test.js` — compat-mode cases (suppress thinking / preserve text / preserve tool_use / mixed)
 - `tests/translator/golden-response-stream.test.js` — stream-level compat case
 - `tests/unit/claude-compat-nonstreaming.test.js` — non-streaming compat cases
 - `tests/unit/claude-classifier-routing.test.js` — locks that 9router does not override the user's auto combo model
-- `tests/unit/claude-default-allow-classifier.test.js` — 6 cases locking the default-allow contract: short-circuit fires on classifier marker, executor is NOT called, response starts with `<block>no</block>`, regular Claude requests do NOT short-circuit
+- `tests/unit/claude-default-allow-classifier.test.js` — locks default-allow contract: short-circuit fires on classifier marker, executor is NOT called, response starts with `<block>no</block>`, regular Claude requests do NOT short-circuit
 
 ## Deploy
 
@@ -67,7 +67,7 @@ Behavior reverts to upstream pass-through — auto-mode fail-closed on any upstr
 src/lib/db/repos/settingsRepo.js                   # setting default
 src/sse/handlers/chat.js                          # compat plumbing
 open-sse/handlers/chatCore.js                     # short-circuit + buildDefaultAllowClaudeMessage + shouldDefaultAllowClassifier
-src/app/(dashboard)/dashboard/token-saver/TokenSaverClient.js  # UI segmented control
+src/app/(dashboard)/dashboard/cli-tools/components/ClaudeToolCard.js  # UI classifier controls
 cli/src/cli/menus/settings.js                     # CLI menu
 run.sh                                            # deploy script
 AGENTS.md                                         # this file
@@ -96,11 +96,14 @@ Antigravity CLI (`agy`) communicates with Google internal Code Assist endpoints 
    - `retrieveUserQuotaSummary`: uses `project: "aicode-consumers"` without extraneous SDK headers.
 4. **MITM Pass-Through**:
    `src/mitm/antigravityIdeVersion.js` preserves `antigravity/cli/*` user agents instead of rewriting to desktop version.
-5. **Credential Auto-Import via OS Keyring**:
-   `GET /api/oauth/agy/auto-import` extracts credentials directly from the system keyring:
-   - **Linux**: DBus Secret Service (`service: "gemini"`, `username: "antigravity"`) via `libsecret` / `secret-tool`.
-   - **macOS**: Keychain (`service: "gemini"`, `account: "antigravity"`) via `/usr/bin/security`.
-   - **Fallback**: Probes `AGY_TOKEN_FILE` or `~/.gemini/antigravity-cli/antigravity-oauth-token` when keyring is bypassed.
+5. **Credential Auto-Import via File & OS Keyring**:
+   `GET /api/oauth/agy/auto-import` extracts credentials:
+   - Probes `AGY_TOKEN_FILE` override first; if specified and invalid, remains authoritative.
+   - Otherwise checks default token file `~/.gemini/antigravity-cli/antigravity-oauth-token`.
+   - If default file is missing or malformed, falls back to the OS Keyring:
+     - **Linux**: DBus Secret Service (`service: "gemini"`, `username: "antigravity"`) via `libsecret` / `secret-tool`.
+     - **macOS**: Keychain (`service: "gemini"`, `account: "antigravity"`) via `/usr/bin/security`.
+   - If keyring is also empty, reports the file error or missing credentials.
 
 ## Runtime & Access Guard
 

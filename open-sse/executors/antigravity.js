@@ -136,7 +136,8 @@ export class AntigravityExecutor extends BaseExecutor {
   }
 
   transformRequest(model, body, stream, credentials) {
-    const projectId = credentials?.projectId || this.generateProjectId();
+    const isAgy = this.provider === "agy" || this.providerName === "agy";
+    const projectId = credentials?.projectId || (isAgy ? "aicode-consumers" : this.generateProjectId());
 
     // OpenAI clients may include stream_options even for non-streaming calls.
     // Google generateContent rejects that combination before processing the request.
@@ -289,7 +290,7 @@ export class AntigravityExecutor extends BaseExecutor {
       ...(tools?.length > 0 && { toolConfig: { functionCallingConfig: { mode: "VALIDATED" } } })
     };
 
-    if ((this.provider === "agy" || this.providerName === "agy") && !transformedRequest.labels) {
+    if (isAgy && !transformedRequest.labels) {
       const trajUuid = uuidFromSeed(`antigravity:trajectory:${sessionId}:${model}`);
       transformedRequest.labels = {
         last_step_index: "0",

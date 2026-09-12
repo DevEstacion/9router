@@ -58,6 +58,8 @@ export default function ClaudeToolCard({
   const [ccFilterNaming, setCcFilterNaming] = useState(false);
   const [exaMcpEnabled, setExaMcpEnabled] = useState(false);
   const [claudeClassifierCompat, setClaudeClassifierCompat] = useState("off");
+  const [classifierCompatSaving, setClassifierCompatSaving] = useState(false);
+  const [classifierCompatError, setClassifierCompatError] = useState("");
   const [autoCompactWindow, setAutoCompactWindow] = useState("");
   const [oneMContext, setOneMContext] = useState(false);
   const hasInitializedModels = useRef(false);
@@ -140,20 +142,28 @@ export default function ClaudeToolCard({
     }).catch(() => {});
   };
 
-  const cycleClassifierCompat = (current) => {
-    if (current === "off") return "auto";
-    if (current === "auto") return "always";
-    return "off";
-  };
+  const handleClassifierCompatChange = async (next) => {
+    if (next === claudeClassifierCompat || classifierCompatSaving) return;
+    if (next === "always" && !window.confirm("Always allows every Claude-format classifier request without calling the upstream model. Enable this dangerous mode?")) return;
 
-  const handleCycleClassifierCompat = async () => {
-    const next = cycleClassifierCompat(claudeClassifierCompat);
-    setClaudeClassifierCompat(next);
-    await fetch("/api/settings", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ claudeClassifierCompat: next }),
-    }).catch(() => {});
+    setClassifierCompatSaving(true);
+    setClassifierCompatError("");
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ claudeClassifierCompat: next }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to update classifier compatibility mode.");
+      }
+      setClaudeClassifierCompat(next);
+    } catch (error) {
+      setClassifierCompatError(error.message || "Failed to update classifier compatibility mode.");
+    } finally {
+      setClassifierCompatSaving(false);
+    }
   };
 
   const fetchModelAliases = async () => {
@@ -478,27 +488,43 @@ export default function ClaudeToolCard({
                   </label>
                 </div>
 
-                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr_auto] sm:items-center sm:gap-2">
-                  <span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">Classifier compat</span>
-                  <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">arrow_forward</span>
-                  <button
-                    type="button"
-                    onClick={handleCycleClassifierCompat}
-                    className={`flex w-fit items-center gap-1.5 rounded border px-2 py-2 text-xs font-mono cursor-pointer transition-colors sm:py-1.5 ${
-                      claudeClassifierCompat === "off"
-                        ? "bg-red-500/10 text-red-600 border-red-500/30 hover:bg-red-500/20"
-                        : claudeClassifierCompat === "auto"
-                          ? "bg-yellow-500/10 text-yellow-600 border-yellow-500/30 hover:bg-yellow-500/20"
-                          : "bg-green-500/10 text-green-600 border-green-500/30 hover:bg-green-500/20"
-                    }`}
-                  >
-                    {claudeClassifierCompat.toUpperCase()}
-                    <span className="material-symbols-outlined text-[14px]">cyclone</span>
-                  </button>
-                  <Tooltip text="When on, 9router detects Claude Code's auto-mode classifier calls and replies with '<block>no</block>' so low-cost combo fallbacks don't fail-closed. Cycle: off → auto → always → off.">
-                    <span className="material-symbols-outlined text-text-muted text-[14px] cursor-help">info</span>
-                  </Tooltip>
-                </div>
+                <fieldset className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr] sm:items-start sm:gap-2" disabled={classifierCompatSaving}>
+                  <legend className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">Classifier compat</legend>
+                  <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline sm:pt-2">arrow_forward</span>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap gap-1" role="radiogroup" aria-label="Claude classifier compatibility mode" aria-describedby="classifier-compat-help">
+                      {[
+                        { value: "off", label: "Off" },
+                        { value: "auto", label: "Auto" },
+                        { value: "always", label: "Always — dangerous" },
+                      ].map((option) => {
+                        const selected = claudeClassifierCompat === option.value;
+                        const selectedClass = option.value === "always"
+                          ? "border-red-500/60 bg-red-500/15 text-red-700 dark:text-red-300"
+                          : "border-primary/60 bg-primary/10 text-text-main";
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            role="radio"
+                            aria-checked={selected}
+                            onClick={() => handleClassifierCompatChange(option.value)}
+                            className={`rounded border px-2 py-1.5 text-xs font-medium transition-colors disabled:cursor-wait disabled:opacity-60 ${selected ? selectedClass : "border-border bg-surface text-text-muted hover:border-primary/40 hover:text-text-main"}`}
+                          >
+                            {option.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p id="classifier-compat-help" className="mt-1.5 text-xs text-text-muted">
+                      Auto only allows detected Claude Code classifier calls. Always bypasses every Claude-format classifier request and should only be used when every action is trusted.
+                    </p>
+                    <div className="mt-1 min-h-4 text-xs" aria-live="polite">
+                      {classifierCompatSaving && <span className="text-text-muted">Saving classifier mode...</span>}
+                      {classifierCompatError && <span role="alert" className="text-red-600 dark:text-red-400">{classifierCompatError}</span>}
+                    </div>
+                  </div>
+                </fieldset>
               </div>
 
               {message && (

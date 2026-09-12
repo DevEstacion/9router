@@ -43,15 +43,24 @@ export function pruneHistoricalInlineImages(body, sourceFormat, charLimit = HIST
     : null;
   if (!Array.isArray(items)) return { removed: 0, savedChars: 0 };
 
-  let latestUser = -1;
+  const isAssistantOrTool = (item) => {
+    const role = item?.role;
+    if (role === "assistant" || role === "model" || role === "tool" || role === "function") return true;
+    return ["function_call", "custom_tool_call", "function_call_output", "custom_tool_call_output"].includes(item?.type);
+  };
+  let lastAssistantOrTool = -1;
   items.forEach((item, index) => {
-    if (item?.role === "user") latestUser = index;
+    if (isAssistantOrTool(item)) lastAssistantOrTool = index;
+  });
+  const currentUsers = new Set();
+  items.forEach((item, index) => {
+    if (index > lastAssistantOrTool && item?.role === "user") currentUsers.add(index);
   });
 
   const candidates = [];
   let historicalChars = 0;
   items.forEach((item, index) => {
-    if (!item || index === latestUser) return;
+    if (!item || currentUsers.has(index)) return;
     for (const block of Array.isArray(item.content) ? item.content : []) {
       const chars = dataImageLength(openAIImageUrl(block));
       if (chars) { historicalChars += chars; candidates.push({ item, block, chars, key: "content" }); }

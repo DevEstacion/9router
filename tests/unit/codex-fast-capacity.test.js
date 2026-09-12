@@ -90,6 +90,24 @@ describe("Codex fast tier and capacity handling", () => {
     expect(peek.matched).toBeNull();
     await expect(new Response(peek.replacementBody).text()).resolves.toBe(text);
   });
+
+  it("does not classify assistant text discussing context limit as request error", async () => {
+    const executor = new CodexExecutor();
+    const text = [
+      "event: response.output_text.delta",
+      'data: {"type":"response.output_text.delta","delta":"Your input exceeds the context window of this model. Please adjust your input and try again."}',
+      "",
+    ].join("\n");
+    const response = new Response(streamFromText(text), {
+      status: 200,
+      headers: { "Content-Type": "text/event-stream" },
+    });
+
+    const peek = await executor._peekSseTransientError(response);
+    expect(peek.requestError).toBe(false);
+    expect(peek.matched).toBeNull();
+    await expect(new Response(peek.replacementBody).text()).resolves.toBe(text);
+  });
 });
 
 describe("Codex reasoning normalization", () => {

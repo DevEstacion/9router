@@ -104,7 +104,7 @@ const agy = {
       doOnboard().catch(() => {});
     }
 
-    return { userInfo, projectId };
+    return { userInfo, projectId, tierId };
   },
   mapTokens: (tokens, extra) => ({
     accessToken: tokens.access_token,
@@ -113,6 +113,9 @@ const agy = {
     scope: tokens.scope,
     email: extra?.userInfo?.email,
     projectId: extra?.projectId,
+    providerSpecificData: {
+      tierId: extra?.tierId || "legacy-tier",
+    },
   }),
 };
 

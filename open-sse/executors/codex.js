@@ -183,6 +183,47 @@ function extractSseErrorMessage(text, fallback) {
   return fallback || CODEX_MODEL_CAPACITY_MESSAGE;
 }
 
+function inspectSseForErrors(text) {
+  const lines = String(text || "").split(/\r?\n/);
+  let currentEvent = null;
+
+  for (const line of lines) {
+    if (line.startsWith("event:")) {
+      currentEvent = line.slice(6).trim();
+    } else if (line.startsWith("data:")) {
+      const dataStr = line.slice(5).trim();
+      if (!dataStr || dataStr === "[DONE]") continue;
+
+      let parsed = null;
+      try {
+        parsed = JSON.parse(dataStr);
+      } catch {
+        parsed = null;
+      }
+
+      // If user output delta, it is definitely not an error event
+      if (parsed && (parsed.type === "response.output_text.delta" || parsed.type === "response.function_call_arguments.delta")) {
+        continue;
+      }
+
+      const isExplicitError = currentEvent === "error" || currentEvent === "response.failed" ||
+        Boolean(parsed?.type === "error" || parsed?.type === "response.failed" || parsed?.error || parsed?.response?.error || parsed?.response?.status === "failed");
+
+      if (isExplicitError) {
+        const errorMsg = (parsed ? findNestedMessage(parsed) : null) || dataStr;
+        const lower = String(errorMsg || "").toLowerCase();
+        const accountHit = CODEX_SSE_ACCOUNT_FALLBACK_PATTERNS.find(p => lower.includes(p));
+        if (accountHit) return { matched: accountHit, accountFallback: true, message: errorMsg };
+        const requestHit = CODEX_SSE_REQUEST_ERROR_PATTERNS.find(p => lower.includes(p));
+        if (requestHit) return { matched: requestHit, requestError: true, message: errorMsg };
+        const retryHit = CODEX_SSE_RETRY_PATTERNS.find(p => lower.includes(p));
+        if (retryHit) return { matched: retryHit, message: errorMsg };
+      }
+    }
+  }
+  return null;
+}
+
 function codexSseErrorResponse(status, message) {
   return new Response(JSON.stringify({
     error: {
@@ -336,14 +377,17 @@ export class CodexExecutor extends BaseExecutor {
         if (done) break;
         chunks.push(value);
         text += decoder.decode(value, { stream: true });
-        const lowerText = text.toLowerCase();
-        const accountHit = CODEX_SSE_ACCOUNT_FALLBACK_PATTERNS.find(p => lowerText.includes(p));
-        if (accountHit) { matched = accountHit; accountFallback = true; break; }
-        const requestHit = CODEX_SSE_REQUEST_ERROR_PATTERNS.find(p => lowerText.includes(p));
-        if (requestHit) { matched = requestHit; requestError = true; break; }
-        const retryHit = CODEX_SSE_RETRY_PATTERNS.find(p => lowerText.includes(p));
-        if (retryHit) { matched = retryHit; break; }
-        if (CODEX_SSE_USER_OUTPUT_PATTERNS.some(p => lowerText.includes(p))) break;
+
+        // If user output has started, stream is valid and underway — exit peek immediately
+        if (CODEX_SSE_USER_OUTPUT_PATTERNS.some(p => text.includes(p))) break;
+
+        const errInfo = inspectSseForErrors(text);
+        if (errInfo) {
+          matched = errInfo.matched;
+          accountFallback = Boolean(errInfo.accountFallback);
+          requestError = Boolean(errInfo.requestError);
+          break;
+        }
       }
     } catch (e) {
       dbg("CODEX", `peek read error: ${e.message}`);
