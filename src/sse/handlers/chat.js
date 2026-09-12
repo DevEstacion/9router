@@ -25,6 +25,7 @@ import { updateProviderCredentials, checkAndRefreshToken } from "../services/tok
 import { getProjectIdForConnection } from "open-sse/services/projectId.js";
 import { stripModelContextMarker } from "open-sse/utils/modelMarkers.js";
 import { pruneHistoricalInlineImages } from "open-sse/translator/concerns/modality.js";
+import { normalizeInlineImages } from "open-sse/translator/concerns/inlineImage.js";
 
 /**
  * Handle chat completion request
@@ -55,7 +56,12 @@ export async function handleChat(request, clientRawRequest = null) {
   const { model: modelStr, contextMarker } = stripModelContextMarker(body.model);
   if (contextMarker) body.model = modelStr;
 
-  const staleImageStats = pruneHistoricalInlineImages(body, detectFormatByEndpoint(new URL(request.url).pathname, body));
+  const sourceFormat = detectFormatByEndpoint(new URL(request.url).pathname, body);
+  const inlineImageStats = await normalizeInlineImages(body, sourceFormat);
+  if (inlineImageStats.converted > 0) {
+    log.info("CONTEXT", `normalized ${inlineImageStats.converted} inline image(s), preserved alpha=${inlineImageStats.preservedAlpha}, saved ${inlineImageStats.savedBytes} bytes`);
+  }
+  const staleImageStats = pruneHistoricalInlineImages(body, sourceFormat);
   if (staleImageStats.removed > 0) {
     log.info("CONTEXT", `omitted ${staleImageStats.removed} historical inline image(s), saved ${staleImageStats.savedChars} chars`);
   }

@@ -28,6 +28,7 @@ const dataImageLength = (value) =>
   typeof value === "string" && value.startsWith("data:image/") ? value.length : 0;
 
 function openAIImageUrl(block) {
+  if (block?.type === "image") return block.url;
   if (block?.type !== "image_url" && block?.type !== "input_image") return null;
   return typeof block.image_url === "string" ? block.image_url : block.image_url?.url;
 }
