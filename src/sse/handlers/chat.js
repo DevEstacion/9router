@@ -20,6 +20,7 @@ import { augmentModelsWithCapacityAdapter, withCapacityAdapterStripping, getActi
 import { handleBypassRequest } from "open-sse/utils/bypassHandler.js";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig.js";
 import { detectFormatByEndpoint } from "open-sse/translator/formats.js";
+import { detectFormat } from "open-sse/services/provider.js";
 import * as log from "../utils/logger.js";
 import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh.js";
 import { getProjectIdForConnection } from "open-sse/services/projectId.js";
@@ -56,7 +57,7 @@ export async function handleChat(request, clientRawRequest = null) {
   const { model: modelStr, contextMarker } = stripModelContextMarker(body.model);
   if (contextMarker) body.model = modelStr;
 
-  const sourceFormat = detectFormatByEndpoint(new URL(request.url).pathname, body);
+  const sourceFormat = detectFormatByEndpoint(new URL(request.url).pathname, body) || detectFormat(body);
   const inlineImageStats = await normalizeInlineImages(body, sourceFormat);
   if (inlineImageStats.converted > 0) {
     log.info("CONTEXT", `normalized ${inlineImageStats.converted} inline image(s), preserved alpha=${inlineImageStats.preservedAlpha}, saved ${inlineImageStats.savedBytes} bytes`);
