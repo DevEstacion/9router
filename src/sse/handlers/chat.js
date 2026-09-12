@@ -24,6 +24,7 @@ import * as log from "../utils/logger.js";
 import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh.js";
 import { getProjectIdForConnection } from "open-sse/services/projectId.js";
 import { stripModelContextMarker } from "open-sse/utils/modelMarkers.js";
+import { pruneHistoricalInlineImages } from "open-sse/translator/concerns/modality.js";
 
 /**
  * Handle chat completion request
@@ -53,6 +54,11 @@ export async function handleChat(request, clientRawRequest = null) {
   // The capability travels in the anthropic-beta header, forwarded as-is.
   const { model: modelStr, contextMarker } = stripModelContextMarker(body.model);
   if (contextMarker) body.model = modelStr;
+
+  const staleImageStats = pruneHistoricalInlineImages(body, detectFormatByEndpoint(new URL(request.url).pathname, body));
+  if (staleImageStats.removed > 0) {
+    log.info("CONTEXT", `omitted ${staleImageStats.removed} historical inline image(s), saved ${staleImageStats.savedChars} chars`);
+  }
 
   // Request summary is emitted as the unified "▶" line in chatCore (has fmt/thinking/account)
 

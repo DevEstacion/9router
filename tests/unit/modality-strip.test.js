@@ -1,11 +1,47 @@
 import { describe, it, expect } from "vitest";
-import { stripUnsupportedModalities } from "../../open-sse/translator/concerns/modality.js";
+import { pruneHistoricalInlineImages, stripUnsupportedModalities } from "../../open-sse/translator/concerns/modality.js";
 import { FORMATS } from "../../open-sse/translator/formats.js";
 
 const NO_VISION = { vision: false, audioInput: true, pdf: true };
 const NO_AUDIO = { vision: true, audioInput: false, pdf: true };
 const NO_PDF = { vision: true, audioInput: true, pdf: false };
 const ALL = { vision: true, audioInput: true, pdf: true };
+
+describe("pruneHistoricalInlineImages", () => {
+  const image = (char, size) => `data:image/png;base64,${char.repeat(size)}`;
+
+  it("removes oldest historical images until retained bytes fit the limit", () => {
+    const first = image("a", 60);
+    const second = image("b", 60);
+    const current = image("c", 200);
+    const body = { messages: [
+      { role: "user", content: [{ type: "text", text: "first" }, { type: "image_url", image_url: { url: first } }] },
+      { role: "assistant", content: "seen" },
+      { role: "user", content: [{ type: "image_url", image_url: { url: second } }] },
+      { role: "assistant", content: "seen too" },
+      { role: "user", content: [{ type: "text", text: "current" }, { type: "image_url", image_url: { url: current } }] },
+    ] };
+
+    const result = pruneHistoricalInlineImages(body, FORMATS.OPENAI, second.length);
+
+    expect(result).toEqual({ removed: 1, savedChars: first.length });
+    expect(body.messages[0].content.some((part) => part.type === "image_url")).toBe(false);
+    expect(body.messages[0].content.some((part) => /Previous image omitted/.test(part.text || ""))).toBe(true);
+    expect(body.messages[2].content[0].image_url.url).toBe(second);
+    expect(body.messages[4].content[1].image_url.url).toBe(current);
+  });
+
+  it("supports Responses input and keeps small histories unchanged", () => {
+    const oldImage = image("a", 20);
+    const currentImage = image("b", 20);
+    const body = { input: [
+      { role: "user", content: [{ type: "input_image", image_url: oldImage }] },
+      { role: "user", content: [{ type: "input_image", image_url: currentImage }] },
+    ] };
+    expect(pruneHistoricalInlineImages(body, FORMATS.OPENAI_RESPONSES, oldImage.length)).toEqual({ removed: 0, savedChars: 0 });
+    expect(body.input[0].content[0].image_url).toBe(oldImage);
+  });
+});
 
 describe("stripUnsupportedModalities", () => {
   it("fast-exits when model supports all modalities", () => {

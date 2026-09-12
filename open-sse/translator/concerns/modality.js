@@ -18,6 +18,73 @@ const PLACEHOLDER_PREV = {
 };
 const ph = (cap, isLast) => (isLast ? PLACEHOLDER_CURRENT : PLACEHOLDER_PREV)[cap];
 
+// Grok Build can retain every prior screenshot as a base64 data URI while its
+// context meter charges only vision tokens. Keep current-turn pixels, but bound
+// historical inline image bytes before they make fallback payloads exceed model limits.
+export const HISTORICAL_INLINE_IMAGE_CHAR_LIMIT = 1_000_000;
+const HISTORICAL_IMAGE_PLACEHOLDER = "[Previous image omitted from context; use its saved file path if needed.]";
+
+const dataImageLength = (value) =>
+  typeof value === "string" && value.startsWith("data:image/") ? value.length : 0;
+
+function openAIImageUrl(block) {
+  if (block?.type !== "image_url" && block?.type !== "input_image") return null;
+  return typeof block.image_url === "string" ? block.image_url : block.image_url?.url;
+}
+
+/**
+ * Remove old inline image bytes only when their combined size is pathological.
+ * Latest user turn remains untouched so new image-analysis requests still work.
+ */
+export function pruneHistoricalInlineImages(body, sourceFormat, charLimit = HISTORICAL_INLINE_IMAGE_CHAR_LIMIT) {
+  const items = sourceFormat === FORMATS.OPENAI ? body?.messages
+    : sourceFormat === FORMATS.OPENAI_RESPONSES ? body?.input
+    : null;
+  if (!Array.isArray(items)) return { removed: 0, savedChars: 0 };
+
+  let latestUser = -1;
+  items.forEach((item, index) => {
+    if (item?.role === "user") latestUser = index;
+  });
+
+  const candidates = [];
+  let historicalChars = 0;
+  items.forEach((item, index) => {
+    if (!item || index === latestUser) return;
+    for (const block of Array.isArray(item.content) ? item.content : []) {
+      const chars = dataImageLength(openAIImageUrl(block));
+      if (chars) { historicalChars += chars; candidates.push({ item, block, chars, key: "content" }); }
+    }
+    for (const key of ["images", "attachments", "experimental_attachments"]) {
+      for (const value of Array.isArray(item[key]) ? item[key] : []) {
+        const chars = dataImageLength(typeof value === "string" ? value : value?.url);
+        if (chars) { historicalChars += chars; candidates.push({ item, value, chars, key }); }
+      }
+    }
+  });
+  if (historicalChars <= charLimit) return { removed: 0, savedChars: 0 };
+
+  let removed = 0;
+  let savedChars = 0;
+  const touched = new Set();
+  for (const candidate of candidates) {
+    if (historicalChars <= charLimit) break;
+    const { item, block, value, chars, key } = candidate;
+    item[key] = item[key].filter((entry) => entry !== (key === "content" ? block : value));
+    if (item[key].length === 0 && key !== "content") delete item[key];
+    historicalChars -= chars;
+    savedChars += chars;
+    removed += 1;
+    touched.add(item);
+  }
+  for (const item of touched) {
+    const marker = { type: sourceFormat === FORMATS.OPENAI_RESPONSES ? "input_text" : "text", text: HISTORICAL_IMAGE_PLACEHOLDER };
+    if (Array.isArray(item.content)) item.content.push(marker);
+    else item.content = [marker];
+  }
+  return { removed, savedChars };
+}
+
 // Map gemini inlineData/fileData mime prefix -> capability it requires.
 function capForMime(mime) {
   if (typeof mime !== "string") return null;
