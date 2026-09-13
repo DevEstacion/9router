@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build, deploy, and restart the 9router user service with the Claude classifier compat patch.
+# Build, deploy, and start the 9router user service for the local private-changes install.
 #
 # Why this script exists:
 #   The cli build script (cli/scripts/build-cli.js) writes the Next.js
@@ -28,7 +28,7 @@
 #   2. copy cli/app/.next-cli-build/static → <service>/.next-cli-build/static
 #   3. copy cli/app/public                 → <service>/public
 #   4. SIGKILL any old 9router process (incl. stragglers via pkill -f)
-#   5. systemctl --user restart 9router.service (fresh start)
+#   5. systemctl --user start 9router.service (fresh start after SIGKILL)
 #   6. wait for /api/health + run status-enforcing smoke tests
 #
 # Idempotent. Re-run safely.

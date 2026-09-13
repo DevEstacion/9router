@@ -43,6 +43,7 @@ if (process.argv[2] === "--snapshot") {
 }
 if (!existsSync(snapPath)) { console.error("No baseline. Run --snapshot first."); process.exit(1); }
 const baseline = JSON.parse(readFileSync(snapPath, "utf8"));
+
 if (JSON.stringify(baseline) === JSON.stringify(current)) {
   console.log(`✅ Alias resolution byte-for-byte equal (${ALIAS_TOKENS.length} tokens).`);
   process.exit(0);

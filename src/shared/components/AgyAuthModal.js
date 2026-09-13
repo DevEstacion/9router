@@ -167,11 +167,10 @@ export default function AgyAuthModal({ isOpen, providerInfo, onSuccess, onClose 
     <Modal isOpen={isOpen} title="Connect Antigravity CLI (agy)" onClose={handleClose}>
       <div className="flex flex-col gap-4">
         {/* Navigation tabs */}
-        <div className="flex border-b border-border text-sm" role="tablist" aria-label="Antigravity authentication method">
+        <div className="flex border-b border-border text-sm" aria-label="Antigravity authentication method">
           <button
             type="button"
-            role="tab"
-            aria-selected={authMode === "auto"}
+            aria-pressed={authMode === "auto"}
             className={`px-4 py-2 font-medium border-b-2 transition-colors ${
               authMode === "auto"
                 ? "border-primary text-primary"
@@ -183,8 +182,7 @@ export default function AgyAuthModal({ isOpen, providerInfo, onSuccess, onClose 
           </button>
           <button
             type="button"
-            role="tab"
-            aria-selected={authMode === "paste"}
+            aria-pressed={authMode === "paste"}
             className={`px-4 py-2 font-medium border-b-2 transition-colors ${
               authMode === "paste"
                 ? "border-primary text-primary"
@@ -196,8 +194,7 @@ export default function AgyAuthModal({ isOpen, providerInfo, onSuccess, onClose 
           </button>
           <button
             type="button"
-            role="tab"
-            aria-selected={authMode === "oauth"}
+            aria-pressed={authMode === "oauth"}
             className={`px-4 py-2 font-medium border-b-2 transition-colors ${
               authMode === "oauth"
                 ? "border-primary text-primary"
@@ -256,7 +253,7 @@ export default function AgyAuthModal({ isOpen, providerInfo, onSuccess, onClose 
                   <span className="material-symbols-outlined text-amber-600 dark:text-amber-400 text-base shrink-0">info</span>
                   <div>
                     <p className="font-semibold mb-1">Local login not found</p>
-                    <p>{autoDetectError || "Make sure you have logged into Antigravity CLI with `agy`."}</p>
+                    <p>Could not auto-detect a local Antigravity CLI login. Sign in with `agy`, then retry, or paste a token.</p>
                   </div>
                 </div>
                 <div className="flex gap-2">

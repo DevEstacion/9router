@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Mock next/server
 vi.mock("next/server", () => ({
@@ -26,6 +26,10 @@ describe("POST /api/oauth/agy/import", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     global.fetch = vi.fn();
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
   });
 
   it("successfully imports tokens and persists connection", async () => {
@@ -156,6 +160,10 @@ describe("POST /api/oauth/agy/import", () => {
           expires_in: 3600,
         }),
       })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ email: "refreshed@gmail.com" }),
+      })
       .mockResolvedValue({ ok: false, status: 404 });
     mockCreateConnection.mockResolvedValueOnce({ id: "conn-refresh", provider: "agy" });
     const { POST } = await import("../../src/app/api/oauth/agy/import/route.js");
@@ -166,6 +174,7 @@ describe("POST /api/oauth/agy/import", () => {
     expect(mockCreateConnection).toHaveBeenCalledWith(expect.objectContaining({
       accessToken: "fresh-access",
       refreshToken: "rotated-refresh",
+      email: "refreshed@gmail.com",
       expiresAt: expect.any(String),
       testStatus: "active",
     }));
@@ -184,6 +193,18 @@ describe("POST /api/oauth/agy/import", () => {
 
     expect(res.status).toBe(400);
     expect(data.error).toContain(expectedError);
+    expect(mockCreateConnection).not.toHaveBeenCalled();
+  });
+
+  it("rejects access-only import when token validation fails", async () => {
+    global.fetch.mockResolvedValueOnce({ ok: false, status: 401 });
+    const { POST } = await import("../../src/app/api/oauth/agy/import/route.js");
+
+    const res = await POST({ json: async () => ({ accessToken: "stale-access" }) });
+    const data = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(data.error).toContain("validation failed");
     expect(mockCreateConnection).not.toHaveBeenCalled();
   });
 

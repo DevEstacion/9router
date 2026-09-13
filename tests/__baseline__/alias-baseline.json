@@ -119,6 +119,7 @@
     "morphllm": "morph"
   },
   "idToAlias": {
+    "agy": "agy",
     "alicode": "alicode",
     "alicode-intl": "alicode-intl",
     "alims-intl": "alims-intl",
@@ -204,6 +205,7 @@
   "modelKeys": [
     "af",
     "ag",
+    "agy",
     "alicode",
     "alicode-intl",
     "alims-intl",

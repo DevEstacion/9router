@@ -117,28 +117,29 @@ export async function POST(request) {
     let projectId = "";
     let tierId = "legacy-tier";
 
-    // If access token is available, enrich with user info and code assist metadata
-    if (accessToken) {
-      // 1. Fetch user email if not supplied
-      if (!email) {
-        try {
-          const userRes = await fetch(`${AGY_CONFIG.userInfoUrl}?alt=json`, {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              "x-request-source": "local",
-            },
-          });
-          if (userRes.ok) {
-            const userData = await userRes.json();
-            email = userData.email || null;
-          }
-        } catch (e) {
-          console.error("Failed to fetch user info during agy import:", e);
-        }
+    // Validate access token before persisting an active connection.
+    try {
+      const userRes = await fetch(`${AGY_CONFIG.userInfoUrl}?alt=json`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "x-request-source": "local",
+        },
+      });
+      if (!userRes.ok) {
+        return NextResponse.json({ error: `Antigravity CLI access token validation failed (${userRes.status})` }, { status: 400 });
       }
+      const userData = await userRes.json();
+      if (!userData || typeof userData !== "object" || Array.isArray(userData)) {
+        return NextResponse.json({ error: "Antigravity CLI access token validation returned an invalid response" }, { status: 502 });
+      }
+      if (!email && typeof userData.email === "string") email = userData.email.trim() || null;
+    } catch (error) {
+      console.error("Failed to validate access token during agy import:", error);
+      return NextResponse.json({ error: "Failed to validate Antigravity CLI access token" }, { status: 502 });
+    }
 
-      // 2. Fetch Code Assist project ID and tier
-      try {
+    // Fetch Code Assist project ID and tier.
+    try {
         const loadHeaders = {
           Authorization: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
@@ -163,9 +164,8 @@ export async function POST(request) {
             }
           }
         }
-      } catch (e) {
-        console.error("Failed to fetch code assist info during agy import:", e);
-      }
+    } catch (e) {
+      console.error("Failed to fetch code assist info during agy import:", e);
     }
 
     const connection = await createProviderConnection({

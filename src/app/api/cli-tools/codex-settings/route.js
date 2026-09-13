@@ -84,18 +84,24 @@ const has9RouterConfig = (config) => {
 const isCodexGpt56 = (model) => /^(?:[^/]+\/)?gpt-5\.6-(?:sol|terra|luna)(?:-(?:review|none|minimal|low|medium|high|xhigh|max))*$/.test(model || "");
 
 const applyCodexGpt56Window = (parsed, model) => {
-  if (!isCodexGpt56(model)) return;
-  parsed.model_context_window = CODEX_GPT_56_CONTEXT_WINDOW;
-  parsed.model_auto_compact_token_limit = CODEX_GPT_56_COMPACT_TOKEN_LIMIT;
+  if (isCodexGpt56(model)) {
+    parsed.model_context_window = CODEX_GPT_56_CONTEXT_WINDOW;
+    parsed.model_auto_compact_token_limit = CODEX_GPT_56_COMPACT_TOKEN_LIMIT;
+    parsed.ninerouter_managed_context = true;
+    return;
+  }
+  if (parsed.ninerouter_managed_context === true) {
+    delete parsed.model_context_window;
+    delete parsed.model_auto_compact_token_limit;
+    delete parsed.ninerouter_managed_context;
+  }
 };
 
 const removeManagedCodexGpt56Window = (parsed) => {
-  if (parsed.model_context_window === CODEX_GPT_56_CONTEXT_WINDOW) {
-    delete parsed.model_context_window;
-  }
-  if (parsed.model_auto_compact_token_limit === CODEX_GPT_56_COMPACT_TOKEN_LIMIT) {
-    delete parsed.model_auto_compact_token_limit;
-  }
+  if (parsed.ninerouter_managed_context !== true) return;
+  delete parsed.model_context_window;
+  delete parsed.model_auto_compact_token_limit;
+  delete parsed.ninerouter_managed_context;
 };
 
 const writeConfig = async (configPath, parsed) => {

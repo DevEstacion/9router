@@ -17,13 +17,20 @@ describe("Codex GPT-5.6 managed context settings", () => {
     expect(parsed).toEqual({ model_context_window: 500000, model_auto_compact_token_limit: 450000 });
   });
 
-  it("removes only values managed by 9Router", () => {
-    const managed = { model_context_window: 872000, model_auto_compact_token_limit: 780000 };
+  it("clears only 9Router-managed context when switching away from GPT-5.6", () => {
+    const parsed = {};
+    applyCodexGpt56Window(parsed, "gpt-5.6-sol-medium");
+    applyCodexGpt56Window(parsed, "gpt-6-astra");
+    expect(parsed).toEqual({});
+  });
+
+  it("removes only values marked as managed by 9Router", () => {
+    const coincidental = { model_context_window: 872000, model_auto_compact_token_limit: 780000 };
+    removeManagedCodexGpt56Window(coincidental);
+    expect(coincidental).toEqual({ model_context_window: 872000, model_auto_compact_token_limit: 780000 });
+
+    const managed = { model_context_window: 872000, model_auto_compact_token_limit: 780000, ninerouter_managed_context: true };
     removeManagedCodexGpt56Window(managed);
     expect(managed).toEqual({});
-
-    const custom = { model_context_window: 900000, model_auto_compact_token_limit: 800000 };
-    removeManagedCodexGpt56Window(custom);
-    expect(custom).toEqual({ model_context_window: 900000, model_auto_compact_token_limit: 800000 });
   });
 });
