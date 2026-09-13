@@ -75,6 +75,10 @@ command -v npm >/dev/null 2>&1 || { err "npm not found"; exit 1; }
 command -v curl >/dev/null 2>&1 || { err "curl not found"; exit 1; }
 command -v python3 >/dev/null 2>&1 || { err "python3 not found"; exit 1; }
 
+# Runtime request logs inside the build tree can race Next.js cleanup and cause ENOTEMPTY.
+# They are diagnostics, not deployment state; remove only this generated directory.
+rm -rf "$SERVICE_ROOT/logs"
+
 log "1/6 Building CLI bundle (Next.js + cli scripts)..."
 (
   cd "$REPO_ROOT/cli"
