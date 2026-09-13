@@ -212,7 +212,7 @@ async function cycleClassifierCompat(currentMode) {
 
   const result = await api.updateSettings({ claudeClassifierCompat: next });
   if (result.success) {
-    showStatus(`Claude classifier compat set to ${next}`, "success");
+    showStatus(`Claude classifier compat set to ${next}`, next === "always" ? "warning" : "info");
   } else {
     showStatus(`Failed: ${result.error}`, "error");
   }

@@ -128,6 +128,65 @@ describe("POST /api/oauth/agy/import", () => {
     );
   });
 
+  it.each([
+    ["non-OK response", async () => ({ ok: false, status: 401 }), 400, "(401)"],
+    ["network failure", async () => { throw new Error("offline"); }, 502, "Failed to refresh"],
+    ["invalid JSON", async () => ({ ok: true, json: async () => { throw new Error("invalid JSON"); } }), 502, "invalid JSON"],
+    ["missing access token", async () => ({ ok: true, json: async () => ({ expires_in: 3600 }) }), 502, "missing access_token"],
+    ["invalid expiry", async () => ({ ok: true, json: async () => ({ access_token: "fresh", expires_in: "bad" }) }), 502, "invalid expires_in"],
+  ])("rejects refresh-only import on %s without creating a connection", async (_case, refreshResult, status, errorText) => {
+    global.fetch.mockImplementationOnce(refreshResult);
+    const { POST } = await import("../../src/app/api/oauth/agy/import/route.js");
+
+    const res = await POST({ json: async () => ({ refreshToken: "refresh-only" }) });
+    const data = await res.json();
+
+    expect(res.status).toBe(status);
+    expect(data.error).toContain(errorText);
+    expect(mockCreateConnection).not.toHaveBeenCalled();
+  });
+
+  it("refreshes a refresh-only import before creating an active connection", async () => {
+    global.fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          access_token: "fresh-access",
+          refresh_token: "rotated-refresh",
+          expires_in: 3600,
+        }),
+      })
+      .mockResolvedValue({ ok: false, status: 404 });
+    mockCreateConnection.mockResolvedValueOnce({ id: "conn-refresh", provider: "agy" });
+    const { POST } = await import("../../src/app/api/oauth/agy/import/route.js");
+
+    const res = await POST({ json: async () => ({ refreshToken: "refresh-only" }) });
+
+    expect(res.status).toBe(200);
+    expect(mockCreateConnection).toHaveBeenCalledWith(expect.objectContaining({
+      accessToken: "fresh-access",
+      refreshToken: "rotated-refresh",
+      expiresAt: expect.any(String),
+      testStatus: "active",
+    }));
+  });
+
+  it.each([
+    [{ token: { access_token: { value: "bad" } } }, "access_token must be a string"],
+    [{ token: { refresh_token: ["bad"] } }, "refresh_token must be a string"],
+    [{ token: { access_token: "token", expiry: "not-a-date" } }, "expiry must be a valid date"],
+    [{ token: "bad" }, "token field must be a JSON object"],
+  ])("rejects invalid nested raw token data %#", async (rawJson, expectedError) => {
+    const { POST } = await import("../../src/app/api/oauth/agy/import/route.js");
+
+    const res = await POST({ json: async () => ({ rawJson }) });
+    const data = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(data.error).toContain(expectedError);
+    expect(mockCreateConnection).not.toHaveBeenCalled();
+  });
+
   it("rejects request when neither access token nor refresh token is provided", async () => {
     const { POST } = await import("../../src/app/api/oauth/agy/import/route.js");
 

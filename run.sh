@@ -44,16 +44,36 @@ SERVICE_PUBLIC_DIR="${SERVICE_PUBLIC_DIR:-$SERVICE_ROOT/public}"
 CLI_PUBLIC_DIR="${CLI_PUBLIC_DIR:-$CLI_APP_DIR/public}"
 PORT="${PORT:-20128}"
 BASE_URL="${BASE_URL:-http://127.0.0.1:$PORT}"
+SERVICE_NAME="${SERVICE_NAME:-9router.service}"
 
 log() { printf '\033[1;34m[run.sh]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[run.sh]\033[0m %s\n' "$*" >&2; }
 err() { printf '\033[1;31m[run.sh]\033[0m %s\n' "$*" >&2; }
 
+replace_tree() {
+  local source_dir="$1"
+  local destination_dir="$2"
+  local service_root_resolved destination_resolved
+  service_root_resolved="$(realpath -m "$SERVICE_ROOT")"
+  destination_resolved="$(realpath -m "$destination_dir")"
+  case "$destination_resolved" in
+    "$service_root_resolved"/*) ;;
+    *) err "refusing to replace path outside SERVICE_ROOT: $destination_dir"; return 1 ;;
+  esac
+  [ "$destination_resolved" != "$service_root_resolved" ] || { err "refusing to replace SERVICE_ROOT"; return 1; }
+  rm -rf "$destination_resolved"
+  mkdir -p "$(dirname "$destination_resolved")"
+  cp -a "$source_dir" "$destination_resolved"
+}
+
 # Sanity
 [ -d "$REPO_ROOT" ] || { err "REPO_ROOT not found: $REPO_ROOT"; exit 1; }
-[ -d "$CLI_APP_DIR" ] || { err "CLI_APP_DIR not found: $CLI_APP_DIR"; exit 1; }
+[ -d "$REPO_ROOT/cli" ] || { err "CLI source directory not found: $REPO_ROOT/cli"; exit 1; }
 command -v systemctl >/dev/null 2>&1 || { err "systemctl not found"; exit 1; }
 command -v node >/dev/null 2>&1 || { err "node not found"; exit 1; }
+command -v npm >/dev/null 2>&1 || { err "npm not found"; exit 1; }
+command -v curl >/dev/null 2>&1 || { err "curl not found"; exit 1; }
+command -v python3 >/dev/null 2>&1 || { err "python3 not found"; exit 1; }
 
 log "1/6 Building CLI bundle (Next.js + cli scripts)..."
 (
@@ -68,9 +88,8 @@ log "1/6 Building CLI bundle (Next.js + cli scripts)..."
 
 log "2/6 Syncing static assets into live service bundle..."
 if [ -d "$CLI_STATIC_DIR" ]; then
-  mkdir -p "$SERVICE_STATIC_DIR"
-  cp -r "$CLI_STATIC_DIR"/. "$SERVICE_STATIC_DIR"/
-  log "  copied: $CLI_STATIC_DIR → $SERVICE_STATIC_DIR"
+  replace_tree "$CLI_STATIC_DIR" "$SERVICE_STATIC_DIR"
+  log "  replaced: $CLI_STATIC_DIR → $SERVICE_STATIC_DIR"
 else
   warn "  no static dir at $CLI_STATIC_DIR (build may have failed)"
   exit 1
@@ -78,10 +97,9 @@ fi
 
 log "3/6 Syncing public folder and custom-server wrapper..."
 if [ -d "$CLI_PUBLIC_DIR" ]; then
-  mkdir -p "$SERVICE_PUBLIC_DIR"
-  cp -r "$CLI_PUBLIC_DIR"/. "$SERVICE_PUBLIC_DIR"/
+  replace_tree "$CLI_PUBLIC_DIR" "$SERVICE_PUBLIC_DIR"
   COUNT=$(find "$SERVICE_PUBLIC_DIR" -type f | wc -l)
-  log "  copied: $CLI_PUBLIC_DIR → $SERVICE_PUBLIC_DIR ($COUNT files)"
+  log "  replaced: $CLI_PUBLIC_DIR → $SERVICE_PUBLIC_DIR ($COUNT files)"
 else
   warn "  no public dir at $CLI_PUBLIC_DIR (continuing without — icons may 404)"
 fi
@@ -93,7 +111,7 @@ fi
 log "4/6 Killing any lingering 9router processes (SIGKILL)..."
 # systemctl kill sends SIGKILL to the service's cgroup; this catches the
 # main `node server.js` plus any helpers still registered with systemd.
-systemctl --user kill --signal=SIGKILL 9router.service 2>/dev/null || true
+systemctl --user kill --signal=SIGKILL "$SERVICE_NAME" 2>/dev/null || true
 # pkill fallback for stragglers not visible to systemd (e.g., the
 # `next-server` workers that survived a hot reload). Scoped via `-f` to
 # the resolved service path so unrelated node processes are NOT killed.
@@ -111,7 +129,7 @@ for i in $(seq 1 5); do
 done
 
 log "5/6 Starting fresh 9router user service..."
-systemctl --user start 9router.service
+systemctl --user start "$SERVICE_NAME"
 
 log "6/6 Waiting for service on $BASE_URL (max 30s)..."
 ready=0
@@ -123,15 +141,21 @@ for i in $(seq 1 30); do
   fi
   sleep 1
 done
-[ "$ready" = "1" ] || { err "service did not become reachable in 30s"; systemctl --user status 9router.service --no-pager | head -20; exit 1; }
+[ "$ready" = "1" ] || { err "service did not become healthy in 30s"; systemctl --user status "$SERVICE_NAME" --no-pager | head -20; exit 1; }
 
 log "Smoke tests..."
+curl -sf "$BASE_URL/api/health" >/dev/null || { err "GET /api/health failed"; exit 1; }
+echo "  GET /api/health → OK"
+
 SET=$(curl -sf "$BASE_URL/api/settings") || { err "GET /api/settings failed"; exit 1; }
 MODE=$(echo "$SET" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("claudeClassifierCompat","?"))')
 echo "  GET /api/settings → claudeClassifierCompat=$MODE"
 
-curl -sfI "$BASE_URL/_next/static/chunks/" >/dev/null || { err "HEAD /_next/static/chunks/ failed"; exit 1; }
-echo "  HEAD /_next/static/chunks/ → OK"
+STATIC_ASSET=$(find "$CLI_STATIC_DIR" -type f -print -quit)
+[ -n "$STATIC_ASSET" ] || { err "no generated static asset found under $CLI_STATIC_DIR"; exit 1; }
+STATIC_PATH="${STATIC_ASSET#"$CLI_STATIC_DIR"/}"
+curl -sfI "$BASE_URL/_next/static/$STATIC_PATH" >/dev/null || { err "HEAD /_next/static/$STATIC_PATH failed"; exit 1; }
+echo "  HEAD /_next/static/$STATIC_PATH → OK"
 
 curl -sfI "$BASE_URL/favicon.svg" >/dev/null || { err "HEAD /favicon.svg failed"; exit 1; }
 echo "  HEAD /favicon.svg → OK"

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-9Router (`9router-app`) — a local AI routing gateway + Next.js dashboard. It exposes one OpenAI-compatible endpoint (`/v1/*`) and routes traffic across 40+ upstream providers with format translation, model-combo fallback, multi-account fallback, OAuth/API-key credential management, token refresh, quota/usage tracking, and optional cloud sync.
+9Router (`9router-app`) — a local AI routing gateway + Next.js dashboard. It exposes one OpenAI-compatible endpoint (`/v1/*`) and routes traffic across many upstream providers with format translation, model-combo fallback, multi-account fallback, OAuth/API-key credential management, token refresh, quota/usage tracking, and optional cloud sync.
 
 Two published artifacts live in this one repo:
 - The **dashboard + gateway** (root `package.json`, `9router-app`) — the Next.js server that does the actual routing.
@@ -40,8 +40,7 @@ npx vitest run unit/capabilities.test.js   # single file (path relative to tests
 ```
 > The committed `tests/package.json` `test` script hardcodes Unix paths (`NODE_PATH=/tmp/node_modules …`) — a shared-install workaround from upstream. On Windows (or anywhere), ignore it and use the `npx vitest` form above; `vitest.config.js` resolves the `open-sse`/`@/` aliases from the repo root regardless of where vitest lives.
 >
-> **The suite is NOT expected to be all-green on a plain checkout.** ~938 pass, ~64 fail. Judge regressions with `tests/__baseline__/verify-no-regression.mjs`, not a raw run. Expected red:
-> - 26 catalogued in `tests/__baseline__/known-fails.txt` (rtk, oauth-cursor-auto-import, translator-request-normalization, …).
+> **The suite is NOT expected to be all-green on a plain checkout.** Judge regressions with `tests/__baseline__/verify-no-regression.mjs`, not raw pass/fail totals. Expected red includes failures catalogued in `tests/__baseline__/known-fails.txt` (rtk, oauth-cursor-auto-import, translator-request-normalization, …).
 > - `unit/embeddings.cloud.test.js` imports `cloud/src/handlers/embeddings.js` — the `cloud/` worker dir is **not in this repo**, so it always fails here.
 > - `unit/xai-oauth-service.test.js` times out (5s) when the xAI endpoint-discovery fetch isn't reachable/mocked.
 > - `real/*.real.test.js` make live provider calls — need credentials, skip otherwise.
@@ -70,7 +69,7 @@ Two authoritative docs already exist — read them before working in these areas
 - Never hardcode role/block/model strings — use `open-sse/translator/schema/` and `open-sse/config/` constants. Config-driven and DRY is enforced by convention here.
 
 ### Provider registry (`open-sse/providers/registry/*`)
-- One file per provider. `providers/registry/index.js` is an **auto-generated** static import list — regenerate it with `scripts/migrate-registry.mjs` / `injectDisplayToRegistry.mjs`, don't hand-edit.
+- One file per provider. `providers/registry/index.js` is a static import list; add new registry files there explicitly. `scripts/migrate-registry.mjs` and `scripts/injectDisplayToRegistry.mjs` update individual registry files, not the index.
 - Add a provider: copy `providers/REGISTRY_TEMPLATE.js`, add models to `config/providerModels.js`. Only add an executor for non-OpenAI-compatible upstreams.
 
 ### Persistence — IMPORTANT (ARCHITECTURE.md is stale here)
@@ -86,7 +85,7 @@ Pre-translate hooks that compress `tool_result` content in-place to cut tokens. 
 
 - Plain JavaScript (ESM), no TypeScript. `@/*` path alias → `src/*` (`jsconfig.json`).
 - `custom-server.js` wraps the Next standalone server to derive client IP from the TCP socket and strip attacker-controlled `X-Forwarded-For` — trusting forwarding headers only from a loopback reverse proxy. It mints `NINEROUTER_PEER_TOKEN` to validate loopback requests in `dashboardGuard.js`. It must be executed as the server entry point (`npm start`, `run.sh`, systemd service).
-- Antigravity CLI (`agy`): 9router aligns outbound traffic signatures with official `agy` (`v1.1.27`, CL `976543523`, `aidev_client` UA, request labels). Token auto-import probes the OS Keyring (`service="gemini"`, `username="antigravity"`) via DBus Secret Service on Linux and Keychain on macOS with file fallback.
+- Antigravity CLI (`agy`): 9router aligns outbound traffic signatures with official `agy` (`v1.1.27`, CL `976543523`, `aidev_client` UA, request labels). Token auto-import treats `AGY_TOKEN_FILE` as an authoritative override; otherwise it checks the default token file, then falls back to the OS keyring (`service="gemini"`, `username="antigravity"`) via DBus Secret Service on Linux or Keychain on macOS.
 - Security-sensitive env: `JWT_SECRET` (session cookie), `INITIAL_PASSWORD` (default `123456` — must override), `API_KEY_SECRET`, `MACHINE_ID_SALT`. Full env contract in `.env.example` and ARCHITECTURE.md's env matrix.
 - Binary/protobuf upstreams (kiro EventStream, cursor protobuf, commandcode NDJSON) don't round-trip through OpenAI — they're handled inside their own executor, not the translator.
 - Versioning: root and `cli/` are versioned independently; changes are logged in `CHANGELOG.md`. Commit style is Conventional Commits (`fix(translator): …`, `feat(...)`).

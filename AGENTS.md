@@ -44,12 +44,13 @@ src/sse/handlers/chat.js
 - `tests/unit/openai-to-claude.test.js` — compat-mode cases (suppress thinking / preserve text / preserve tool_use / mixed)
 - `tests/translator/golden-response-stream.test.js` — stream-level compat case
 - `tests/unit/claude-compat-nonstreaming.test.js` — non-streaming compat cases
+- `tests/unit/claude-compat-streaming.test.js` — streaming compat cases
 - `tests/unit/claude-classifier-routing.test.js` — locks that 9router does not override the user's auto combo model
 - `tests/unit/claude-default-allow-classifier.test.js` — locks default-allow contract: short-circuit fires on classifier marker, executor is NOT called, response starts with `<block>no</block>`, regular Claude requests do NOT short-circuit
 
 ## Deploy
 
-`./run.sh` at the repo root does build + static sync + SIGKILL old process + start + smoke test in one command. Required because the cli build writes to `cli/app/.next-cli-build/static` while the live service reads from `<repo>/.next-cli-build/standalone/9router/.next-cli-build/static` (Next.js `distDir` mismatch).
+`./run.sh` at the repo root builds, replaces generated static/public destinations, preserves the rest of the live standalone directory, stops lingering processes, starts the user service, waits on `/api/health`, and runs status-enforcing smoke tests. It does not replay classifier requests or mutate `claudeClassifierCompat`; unit tests own classifier verification.
 
 ## Rollback
 
@@ -69,11 +70,9 @@ src/sse/handlers/chat.js                          # compat plumbing
 open-sse/handlers/chatCore.js                     # short-circuit + buildDefaultAllowClaudeMessage + shouldDefaultAllowClassifier
 src/app/(dashboard)/dashboard/cli-tools/components/ClaudeToolCard.js  # UI classifier controls
 cli/src/cli/menus/settings.js                     # CLI menu
-run.sh                                            # deploy script
-AGENTS.md                                         # this file
 ```
 
-Tests in `tests/unit/openai-to-claude.test.js`, `tests/translator/golden-response-stream.test.js`, `tests/unit/claude-compat-nonstreaming.test.js`, `tests/unit/claude-classifier-routing.test.js`, `tests/unit/claude-default-allow-classifier.test.js`.
+Tests in `tests/unit/openai-to-claude.test.js`, `tests/translator/golden-response-stream.test.js`, `tests/unit/claude-compat-nonstreaming.test.js`, `tests/unit/claude-compat-streaming.test.js`, `tests/unit/claude-classifier-routing.test.js`, and `tests/unit/claude-default-allow-classifier.test.js`.
 
 If a future rebase drops ANY of these, the patch is broken — the synthetic `<block>no</block>` short-circuit is the entire feature.
 

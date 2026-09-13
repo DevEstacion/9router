@@ -41,6 +41,28 @@ describe("pruneHistoricalInlineImages", () => {
     expect(pruneHistoricalInlineImages(body, FORMATS.OPENAI_RESPONSES, oldImage.length)).toEqual({ removed: 0, savedChars: 0 });
     expect(body.input[0].content[0].image_url).toBe(oldImage);
   });
+
+  it("treats the latest user image as historical after a later assistant item", () => {
+    const priorImage = image("a", 80);
+    const body = { messages: [
+      { role: "user", content: [{ type: "image_url", image_url: { url: priorImage } }] },
+      { role: "assistant", content: "analysis complete" },
+    ] };
+
+    expect(pruneHistoricalInlineImages(body, FORMATS.OPENAI, 0)).toEqual({ removed: 1, savedChars: priorImage.length });
+    expect(body.messages[0].content.some((part) => part.type === "image_url")).toBe(false);
+  });
+
+  it("treats a Responses user image as historical after a later tool item", () => {
+    const priorImage = image("a", 80);
+    const body = { input: [
+      { role: "user", content: [{ type: "input_image", image_url: priorImage }] },
+      { type: "function_call_output", call_id: "call_1", output: "done" },
+    ] };
+
+    expect(pruneHistoricalInlineImages(body, FORMATS.OPENAI_RESPONSES, 0)).toEqual({ removed: 1, savedChars: priorImage.length });
+    expect(body.input[0].content.some((part) => part.type === "input_image")).toBe(false);
+  });
 });
 
 describe("stripUnsupportedModalities", () => {

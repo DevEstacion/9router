@@ -18,12 +18,10 @@ import { stripCodexUnsupportedPatterns } from "../utils/codexToolSchema.js";
 const CODEX_SSE_RETRY_PATTERNS = ["server_is_overloaded", "service_unavailable_error"];
 const CODEX_SSE_ACCOUNT_FALLBACK_PATTERNS = ["selected model is at capacity", "model_at_capacity"];
 const CODEX_SSE_REQUEST_ERROR_PATTERNS = ["input exceeds the context window", "context window exceeds limit"];
-const CODEX_SSE_USER_OUTPUT_PATTERNS = [
-  "event: response.output_text.delta",
-  "event: response.function_call_arguments.delta",
-  '"type":"response.output_text.delta"',
-  '"type":"response.function_call_arguments.delta"',
-];
+const CODEX_SSE_USER_OUTPUT_EVENTS = new Set([
+  "response.output_text.delta",
+  "response.function_call_arguments.delta",
+]);
 const CODEX_SSE_PEEK_BYTES = 256 * 1024;
 const CODEX_MODEL_CAPACITY_MESSAGE = "Selected model is at capacity. Please try a different model.";
 
@@ -183,7 +181,7 @@ function extractSseErrorMessage(text, fallback) {
   return fallback || CODEX_MODEL_CAPACITY_MESSAGE;
 }
 
-function inspectSseForErrors(text) {
+function inspectSseFrames(text) {
   const lines = String(text || "").split(/\r?\n/);
   let currentEvent = null;
 
@@ -201,10 +199,8 @@ function inspectSseForErrors(text) {
         parsed = null;
       }
 
-      // If user output delta, it is definitely not an error event
-      if (parsed && (parsed.type === "response.output_text.delta" || parsed.type === "response.function_call_arguments.delta")) {
-        continue;
-      }
+      const eventType = parsed?.type || currentEvent;
+      if (CODEX_SSE_USER_OUTPUT_EVENTS.has(eventType)) return { userOutput: true };
 
       const isExplicitError = currentEvent === "error" || currentEvent === "response.failed" ||
         Boolean(parsed?.type === "error" || parsed?.type === "response.failed" || parsed?.error || parsed?.response?.error || parsed?.response?.status === "failed");
@@ -378,14 +374,12 @@ export class CodexExecutor extends BaseExecutor {
         chunks.push(value);
         text += decoder.decode(value, { stream: true });
 
-        // If user output has started, stream is valid and underway — exit peek immediately
-        if (CODEX_SSE_USER_OUTPUT_PATTERNS.some(p => text.includes(p))) break;
-
-        const errInfo = inspectSseForErrors(text);
-        if (errInfo) {
-          matched = errInfo.matched;
-          accountFallback = Boolean(errInfo.accountFallback);
-          requestError = Boolean(errInfo.requestError);
+        const frameInfo = inspectSseFrames(text);
+        if (frameInfo?.userOutput) break;
+        if (frameInfo) {
+          matched = frameInfo.matched;
+          accountFallback = Boolean(frameInfo.accountFallback);
+          requestError = Boolean(frameInfo.requestError);
           break;
         }
       }

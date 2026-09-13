@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import PropTypes from "prop-types";
 import { Modal, Button, Input, OAuthModal } from "@/shared/components";
 
@@ -23,7 +23,7 @@ export default function AgyAuthModal({ isOpen, providerInfo, onSuccess, onClose 
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState(null);
 
-  const clearTransientState = () => {
+  const clearTransientState = useCallback(() => {
     setAuthMode("auto");
     setAutoDetecting(false);
     setAutoDetected(false);
@@ -33,9 +33,9 @@ export default function AgyAuthModal({ isOpen, providerInfo, onSuccess, onClose 
     setCustomName("");
     setImporting(false);
     setImportError(null);
-  };
+  }, []);
 
-  const runAutoDetect = async (signal) => {
+  const runAutoDetect = useCallback(async (signal) => {
     setAutoDetecting(true);
     setAutoDetectError(null);
     setAutoDetected(false);
@@ -59,18 +59,19 @@ export default function AgyAuthModal({ isOpen, providerInfo, onSuccess, onClose 
     } finally {
       if (!signal?.aborted) setAutoDetecting(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    if (!isOpen) return;
     const controller = new AbortController();
-    queueMicrotask(() => {
-      if (!controller.signal.aborted) {
-        runAutoDetect(controller.signal);
-      }
-    });
-    return () => controller.abort();
-  }, [isOpen]);
+    const timer = setTimeout(() => {
+      clearTransientState();
+      if (isOpen) runAutoDetect(controller.signal);
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [isOpen, clearTransientState, runAutoDetect]);
 
   const handleClose = () => {
     clearTransientState();

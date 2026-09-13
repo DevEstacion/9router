@@ -1,4 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+vi.mock("../../open-sse/utils/proxyFetch.js", () => ({
+  proxyAwareFetch: vi.fn(),
+}));
+
+import { proxyAwareFetch } from "../../open-sse/utils/proxyFetch.js";
+import { getUsageForProvider } from "../../open-sse/services/usage.js";
 import { getAgyCliUserAgent, AGY_CLI_VERSION, AGY_CLI_CL } from "../../open-sse/providers/shared.js";
 import { PROVIDERS } from "../../open-sse/config/providers.js";
 import { AGY_CONFIG } from "../../src/lib/oauth/constants/oauth.js";
@@ -6,6 +13,10 @@ import { AntigravityExecutor } from "../../open-sse/executors/antigravity.js";
 import { rewriteAntigravityUserAgent } from "../../src/mitm/antigravityIdeVersion.js";
 
 describe("Antigravity CLI (agy) Traffic & Request Signature", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("formats getAgyCliUserAgent according to official aidev_client specification", () => {
     const ua = getAgyCliUserAgent();
     expect(ua).toMatch(
@@ -61,6 +72,41 @@ describe("Antigravity CLI (agy) Traffic & Request Signature", () => {
     expect(transformed.request.labels.used_claude).toBe("false");
     expect(transformed.request.labels.used_non_gemini_model).toBe("false");
     expect(transformed.request.labels.trajectory_id).toBeDefined();
+  });
+
+  it("uses connection projectId for Agy usage", async () => {
+    proxyAwareFetch.mockResolvedValueOnce(new Response(JSON.stringify({ models: {} }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+
+    await getUsageForProvider({
+      provider: "agy",
+      accessToken: "ya29.test",
+      projectId: "stored-project",
+      providerSpecificData: { tierId: "pro-tier" },
+    });
+
+    expect(proxyAwareFetch).toHaveBeenCalledWith(
+      "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
+      expect.objectContaining({ body: JSON.stringify({ project: "stored-project" }) }),
+      null
+    );
+  });
+
+  it("uses the Agy project fallback instead of a random project ID", () => {
+    const executor = new AntigravityExecutor("agy");
+    const transformed = executor.transformRequest(
+      "gemini-3.8-flash-low",
+      {
+        model: "gemini-3.8-flash-low",
+        request: { contents: [{ role: "user", parts: [{ text: "Hello" }] }] },
+      },
+      true,
+      { accessToken: "ya29.test", email: "test@example.com" }
+    );
+
+    expect(transformed.project).toBe("aicode-consumers");
   });
 
   it("preserves authentic agy CLI User-Agent in MITM rewrite without replacing with desktop version", () => {

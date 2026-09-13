@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Card, Button, ModelSelectModal, ManualConfigModal, Tooltip } from "@/shared/components";
 import Image from "next/image";
 import BaseUrlSelect from "./BaseUrlSelect";
@@ -94,36 +94,68 @@ export default function ClaudeToolCard({
 
   const configStatus = getConfigStatus();
 
-  useEffect(() => {
-    if (apiKeys?.length > 0 && !selectedApiKey) {
-      setSelectedApiKey(apiKeys[0].key);
+  const fetchModelAliases = useCallback(async () => {
+    try {
+      const res = await fetch("/api/models/alias");
+      const data = await res.json();
+      if (res.ok) setModelAliases(data.aliases || {});
+    } catch (error) {
+      console.log("Error fetching model aliases:", error);
     }
+  }, []);
+
+  const checkClaudeStatus = useCallback(async () => {
+    setCheckingClaude(true);
+    try {
+      const res = await fetch("/api/cli-tools/claude-settings");
+      const data = await res.json();
+      setClaudeStatus(data);
+      setExaMcpEnabled(!!data.exaMcpEnabled);
+    } catch (error) {
+      setClaudeStatus({ installed: false, error: error.message });
+    } finally {
+      setCheckingClaude(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (apiKeys?.length === 0 || selectedApiKey) return;
+    const timer = setTimeout(() => setSelectedApiKey(apiKeys[0].key), 0);
+    return () => clearTimeout(timer);
   }, [apiKeys, selectedApiKey]);
 
   useEffect(() => {
-    if (initialStatus) {
+    if (!initialStatus) return;
+    const timer = setTimeout(() => {
       setClaudeStatus(initialStatus);
       setExaMcpEnabled(!!initialStatus.exaMcpEnabled);
-    }
+    }, 0);
+    return () => clearTimeout(timer);
   }, [initialStatus]);
 
   useEffect(() => {
-    const v = claudeStatus?.settings?.env?.CLAUDE_CODE_AUTO_COMPACT_WINDOW;
-    setAutoCompactWindow(v || "");
+    const value = claudeStatus?.settings?.env?.CLAUDE_CODE_AUTO_COMPACT_WINDOW || "";
+    const timer = setTimeout(() => setAutoCompactWindow(value), 0);
+    return () => clearTimeout(timer);
   }, [claudeStatus?.settings?.env?.CLAUDE_CODE_AUTO_COMPACT_WINDOW]);
 
   useEffect(() => {
     const env = claudeStatus?.settings?.env;
     if (!env) return;
-    setOneMContext(tool.defaultModels.some((model) => env[model.envKey]?.endsWith("[1m]")));
+    const timer = setTimeout(() => {
+      setOneMContext(tool.defaultModels.some((model) => env[model.envKey]?.endsWith("[1m]")));
+    }, 0);
+    return () => clearTimeout(timer);
   }, [claudeStatus?.settings?.env, tool.defaultModels]);
 
   useEffect(() => {
-    if (isExpanded) {
+    if (!isExpanded) return;
+    const timer = setTimeout(() => {
       if (!claudeStatus) checkClaudeStatus();
       fetchModelAliases();
-    }
-  }, [isExpanded]);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [isExpanded, claudeStatus, checkClaudeStatus, fetchModelAliases]);
 
   useEffect(() => {
     fetch("/api/settings").then(r => r.json()).then(data => {
@@ -166,53 +198,24 @@ export default function ClaudeToolCard({
     }
   };
 
-  const fetchModelAliases = async () => {
-    try {
-      const res = await fetch("/api/models/alias");
-      const data = await res.json();
-      if (res.ok) setModelAliases(data.aliases || {});
-    } catch (error) {
-      console.log("Error fetching model aliases:", error);
-    }
-  };
-
   useEffect(() => {
-    if (claudeStatus?.installed && !hasInitializedModels.current) {
-      hasInitializedModels.current = true;
-      const env = claudeStatus.settings?.env || {};
-
+    if (!claudeStatus?.installed || hasInitializedModels.current) return;
+    hasInitializedModels.current = true;
+    const env = claudeStatus.settings?.env || {};
+    const timer = setTimeout(() => {
       tool.defaultModels.forEach((model) => {
         if (model.envKey) {
           // Kept verbatim (marker included) so the input matches what is on disk;
           // withContextMarker strips before appending, so re-applying cannot double it.
           const value = env[model.envKey] || model.defaultValue || "";
-          // Only sync initial values from file once
-          if (value) {
-            onModelMappingChange(model.alias, value);
-          }
+          if (value) onModelMappingChange(model.alias, value);
         }
       });
-      // Restore key from settings.json; ApiKeySelect matches it against saved presets
       const tokenFromFile = env.ANTHROPIC_AUTH_TOKEN;
-      if (tokenFromFile) {
-        setSelectedApiKey(tokenFromFile);
-      }
-    }
-  }, [claudeStatus, apiKeys, tool.defaultModels, onModelMappingChange]);
-
-  const checkClaudeStatus = async () => {
-    setCheckingClaude(true);
-    try {
-      const res = await fetch("/api/cli-tools/claude-settings");
-      const data = await res.json();
-      setClaudeStatus(data);
-      setExaMcpEnabled(!!data.exaMcpEnabled);
-    } catch (error) {
-      setClaudeStatus({ installed: false, error: error.message });
-    } finally {
-      setCheckingClaude(false);
-    }
-  };
+      if (tokenFromFile) setSelectedApiKey(tokenFromFile);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [claudeStatus, tool.defaultModels, onModelMappingChange]);
 
   const getEffectiveBaseUrl = () => {
     const url = customBaseUrl || baseUrl;

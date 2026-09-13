@@ -48,4 +48,21 @@ describe("Antigravity CLI (agy) Provider Registry", () => {
     expect(typeof agyOAuthProvider.postExchange).toBe("function");
     expect(typeof agyOAuthProvider.mapTokens).toBe("function");
   });
+
+  it("preserves browser OAuth tierId in providerSpecificData", () => {
+    const mapped = agyOAuthProvider.mapTokens(
+      { access_token: "access", refresh_token: "refresh", expires_in: 3600 },
+      {
+        userInfo: { email: "agy@example.com" },
+        projectId: "agy-project",
+        tierId: "pro-tier",
+      }
+    );
+
+    expect(mapped).toMatchObject({
+      email: "agy@example.com",
+      projectId: "agy-project",
+      providerSpecificData: { tierId: "pro-tier" },
+    });
+  });
 });

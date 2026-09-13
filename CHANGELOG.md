@@ -9,7 +9,7 @@
 - **CLI tools**: group the model selector by provider with full-text search and manual custom model ID entry
 - **CodeBuddy-CN**: replace `deepseek-v4-flash` with `deepseek-v4.1-flash`
 - **Claude Code Classifier Compat**: add auto-mode classifier default-allow short-circuit (`off`, `auto`, `always`) returning synthetic `<block>no</block>` to prevent fail-closed blocks on combo fallbacks; accessible UI controls in ClaudeToolCard and CLI settings confirmation
-- **Multimodal**: add Sharp-based image normalization converting bulky inline images to JPEG while preserving alpha channels, plus historical image pruning after assistant turns
+- **Multimodal**: normalize inline OpenAI chat and Responses images before routing—downscale oversized inputs, compress opaque images as JPEG, preserve transparency as PNG, and fail open on decode errors; prune pathological historical inline-image payloads while retaining the latest user turn
 
 ## Fixes
 - **Codex**: parse SSE error events structurally to prevent assistant output mentioning context limits from being misclassified as upstream 400 errors

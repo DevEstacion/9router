@@ -481,26 +481,44 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     return createErrorResult(statusCode, errMsg, resetsAtMs);
   }
 
-  const sharedCtx = { provider, model, body, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, clientRawRequest, onRequestSuccess, pxpipe: pxpipeSummary, reqTag, log };
   const appendLog = (extra) => appendRequestLog({ model, provider, connectionId, ...extra }).catch(() => { });
   const trackDone = () => trackPendingRequest(model, provider, connectionId, false);
 
   // Provider forced streaming but client wants JSON
   if (!clientRequestedStreaming && providerRequiresStreaming) {
-    const result = await handleForcedSSEToJson({ ...sharedCtx, providerResponse, sourceFormat, targetFormat: providerResponseFormat, customToolNames, trackDone, appendLog });
+    const result = await handleForcedSSEToJson({
+      providerResponse, provider, model, sourceFormat, targetFormat: providerResponseFormat,
+      body, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey,
+      clientRawRequest, onRequestSuccess, customToolNames, trackDone, appendLog,
+      pxpipe: pxpipeSummary, reqTag, log,
+    });
     if (result) { streamController.handleComplete(); return result; }
   }
 
   // True non-streaming response
   if (!stream) {
-    const result = await handleNonStreamingResponse({ ...sharedCtx, providerResponse, sourceFormat, targetFormat: providerResponseFormat, reqLogger, toolNameMap, customToolNames, trackDone, appendLog });
+    const result = await handleNonStreamingResponse({
+      providerResponse, provider, model, sourceFormat, targetFormat: providerResponseFormat,
+      body, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey,
+      clientRawRequest, onRequestSuccess, reqLogger, toolNameMap, customToolNames,
+      trackDone, appendLog, pxpipe: pxpipeSummary, reqTag, log,
+    });
     streamController.handleComplete();
     return result;
   }
 
   // Streaming response
-  const { onStreamComplete, streamDetailId } = buildOnStreamComplete({ ...sharedCtx });
-  return handleStreamingResponse({ ...sharedCtx, providerResponse, sourceFormat, targetFormat: providerResponseFormat, userAgent, reqLogger, toolNameMap, customToolNames, streamController, onStreamComplete, streamDetailId, credentials });
+  const { onStreamComplete, streamDetailId } = buildOnStreamComplete({
+    provider, model, connectionId, apiKey, requestStartTime, body, stream,
+    finalBody, translatedBody, clientRawRequest, pxpipe: pxpipeSummary, reqTag, log,
+  });
+  return handleStreamingResponse({
+    providerResponse, provider, model, sourceFormat, targetFormat: providerResponseFormat,
+    userAgent, body, stream, translatedBody, finalBody, requestStartTime, connectionId,
+    apiKey, clientRawRequest, onRequestSuccess, reqLogger, toolNameMap, customToolNames,
+    streamController, onStreamComplete, streamDetailId, pxpipe: pxpipeSummary, reqTag,
+    log, credentials,
+  });
 }
 
 function buildDefaultAllowClaudeMessage() {

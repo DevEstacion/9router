@@ -95,7 +95,10 @@ export async function POST(request) {
       } catch {
         return NextResponse.json({ error: "Token refresh returned invalid JSON" }, { status: 502 });
       }
-      if (!data || typeof data.access_token !== "string" || !data.access_token.trim()) {
+      if (!data || typeof data !== "object" || Array.isArray(data)) {
+        return NextResponse.json({ error: "Token refresh returned an invalid response" }, { status: 502 });
+      }
+      if (typeof data.access_token !== "string" || !data.access_token.trim()) {
         return NextResponse.json({ error: "Token refresh response missing access_token" }, { status: 502 });
       }
       if (data.expires_in !== undefined && (!Number.isFinite(Number(data.expires_in)) || Number(data.expires_in) <= 0)) {
