@@ -9,7 +9,7 @@ const failedModel = async () => new Response(
 );
 
 describe("combo Responses terminal failure", () => {
-  it("emits response.failed SSE for streamed Responses requests", async () => {
+  it("preserves request-scoped 400 errors instead of converting them into retryable SSE", async () => {
     const result = await handleComboChat({
       body: {},
       models: ["broken/model"],
@@ -19,13 +19,9 @@ describe("combo Responses terminal failure", () => {
       log,
     });
 
-    expect(result.status).toBe(200);
-    expect(result.headers.get("content-type")).toContain("text/event-stream");
-    const body = await result.text();
-    expect(body).toContain("event: response.failed");
-    expect(body).toMatch(/"id":"resp_/);
-    expect(body).toContain('"message":"context limit"');
-    expect(body).toContain("data: [DONE]");
+    expect(result.status).toBe(400);
+    expect(result.headers.get("content-type")).toContain("application/json");
+    await expect(result.json()).resolves.toEqual({ error: { message: "context limit" } });
   });
 
   it("emits response.failed SSE when a streamed Responses retry is scheduled", async () => {

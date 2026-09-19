@@ -43,8 +43,6 @@ src/sse/handlers/chat.js
 
 - `tests/unit/openai-to-claude.test.js` — compat-mode cases (suppress thinking / preserve text / preserve tool_use / mixed)
 - `tests/translator/golden-response-stream.test.js` — stream-level compat case
-- `tests/unit/claude-compat-nonstreaming.test.js` — non-streaming compat cases
-- `tests/unit/claude-compat-streaming.test.js` — streaming compat cases
 - `tests/unit/claude-classifier-routing.test.js` — locks that 9router does not override the user's auto combo model
 - `tests/unit/claude-default-allow-classifier.test.js` — locks default-allow contract: short-circuit fires on classifier marker, executor is NOT called, response starts with `<block>no</block>`, regular Claude requests do NOT short-circuit
 
@@ -72,7 +70,7 @@ src/app/(dashboard)/dashboard/cli-tools/components/ClaudeToolCard.js  # UI class
 cli/src/cli/menus/settings.js                     # CLI menu
 ```
 
-Tests in `tests/unit/openai-to-claude.test.js`, `tests/translator/golden-response-stream.test.js`, `tests/unit/claude-compat-nonstreaming.test.js`, `tests/unit/claude-compat-streaming.test.js`, `tests/unit/claude-classifier-routing.test.js`, and `tests/unit/claude-default-allow-classifier.test.js`.
+Tests in `tests/unit/openai-to-claude.test.js`, `tests/translator/golden-response-stream.test.js`, `tests/unit/claude-classifier-routing.test.js`, and `tests/unit/claude-default-allow-classifier.test.js`.
 
 If a future rebase drops ANY of these, the patch is broken — the synthetic `<block>no</block>` short-circuit is the entire feature.
 
