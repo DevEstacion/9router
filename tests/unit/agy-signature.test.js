@@ -62,7 +62,8 @@ describe("Antigravity CLI (agy) Traffic & Request Signature", () => {
     expect(transformed.project).toBe("aicode-consumers");
     expect(transformed.model).toBe("gemini-3.8-flash-low");
     expect(transformed.userAgent).toBe("antigravity");
-    expect(transformed.requestType).toBe("agent");
+    // Upstream rejects requestType="agent" with false 429 RESOURCE_EXHAUSTED.
+    expect(transformed.requestType).toBeUndefined();
     expect(transformed.requestId).toMatch(/^agent\/[a-f0-9-]+\/\d+\/[a-f0-9-]+\/\d+$/);
 
     // Nested request labels verification
