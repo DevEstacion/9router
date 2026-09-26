@@ -66,8 +66,9 @@ export async function POST(request) {
       );
     }
 
-    // If no access token but refresh token exists, refresh to get fresh access token
-    if (!accessToken && refreshToken) {
+    // Helper to refresh access token using refresh_token
+    async function refreshAgyToken() {
+      if (!refreshToken) return { ok: false, error: "No refresh token available" };
       let tokenRes;
       try {
         tokenRes = await fetch(AGY_CONFIG.tokenUrl, {
@@ -82,27 +83,27 @@ export async function POST(request) {
         });
       } catch (error) {
         console.error("Failed to refresh token during agy import:", error);
-        return NextResponse.json({ error: "Failed to refresh Antigravity CLI token" }, { status: 502 });
+        return { ok: false, status: 502, error: "Failed to refresh Antigravity CLI token" };
       }
 
       if (!tokenRes.ok) {
-        return NextResponse.json({ error: `Failed to refresh Antigravity CLI token (${tokenRes.status})` }, { status: 400 });
+        return { ok: false, status: 400, error: `Failed to refresh Antigravity CLI token (${tokenRes.status})` };
       }
 
       let data;
       try {
         data = await tokenRes.json();
       } catch {
-        return NextResponse.json({ error: "Token refresh returned invalid JSON" }, { status: 502 });
+        return { ok: false, status: 502, error: "Token refresh returned invalid JSON" };
       }
       if (!data || typeof data !== "object" || Array.isArray(data)) {
-        return NextResponse.json({ error: "Token refresh returned an invalid response" }, { status: 502 });
+        return { ok: false, status: 502, error: "Token refresh returned an invalid response" };
       }
       if (typeof data.access_token !== "string" || !data.access_token.trim()) {
-        return NextResponse.json({ error: "Token refresh response missing access_token" }, { status: 502 });
+        return { ok: false, status: 502, error: "Token refresh response missing access_token" };
       }
       if (data.expires_in !== undefined && (!Number.isFinite(Number(data.expires_in)) || Number(data.expires_in) <= 0)) {
-        return NextResponse.json({ error: "Token refresh response has invalid expires_in" }, { status: 502 });
+        return { ok: false, status: 502, error: "Token refresh response has invalid expires_in" };
       }
 
       accessToken = data.access_token.trim();
@@ -112,6 +113,16 @@ export async function POST(request) {
       if (data.expires_in !== undefined) {
         expiresAt = new Date(Date.now() + Number(data.expires_in) * 1000).toISOString();
       }
+      return { ok: true };
+    }
+
+    // Refresh if access token is missing or expired
+    const isExpired = expiresAt && Number.isFinite(new Date(expiresAt).getTime()) && new Date(expiresAt).getTime() <= Date.now() + 60000;
+    if ((!accessToken || isExpired) && refreshToken) {
+      const refreshResult = await refreshAgyToken();
+      if (!refreshResult.ok) {
+        return NextResponse.json({ error: refreshResult.error }, { status: refreshResult.status || 400 });
+      }
     }
 
     let projectId = "";
@@ -119,12 +130,26 @@ export async function POST(request) {
 
     // Validate access token before persisting an active connection.
     try {
-      const userRes = await fetch(`${AGY_CONFIG.userInfoUrl}?alt=json`, {
+      let userRes = await fetch(`${AGY_CONFIG.userInfoUrl}?alt=json`, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
           "x-request-source": "local",
         },
       });
+
+      // If validation failed with 401 and we have a refresh token, refresh and retry once
+      if (userRes.status === 401 && refreshToken) {
+        const refreshResult = await refreshAgyToken();
+        if (refreshResult.ok) {
+          userRes = await fetch(`${AGY_CONFIG.userInfoUrl}?alt=json`, {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "x-request-source": "local",
+            },
+          });
+        }
+      }
+
       if (!userRes.ok) {
         return NextResponse.json({ error: `Antigravity CLI access token validation failed (${userRes.status})` }, { status: 400 });
       }

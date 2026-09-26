@@ -208,6 +208,112 @@ describe("POST /api/oauth/agy/import", () => {
     expect(mockCreateConnection).not.toHaveBeenCalled();
   });
 
+  it("automatically refreshes and retries when access token validation returns 401 and refresh token is available", async () => {
+    // 1. userinfo fails with 401
+    // 2. token refresh succeeds with fresh token
+    // 3. userinfo retry succeeds
+    // 4. loadCodeAssist succeeds
+    global.fetch
+      .mockResolvedValueOnce({ ok: false, status: 401 })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          access_token: "refreshed-access-token",
+          refresh_token: "refreshed-refresh-token",
+          expires_in: 3600,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ email: "recovered@gmail.com" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          cloudaicompanionProject: { id: "proj-recovered" },
+          allowedTiers: [{ id: "standard-tier", isDefault: true }],
+        }),
+      });
+
+    mockCreateConnection.mockResolvedValueOnce({
+      id: "conn-recovered",
+      provider: "agy",
+      email: "recovered@gmail.com",
+    });
+
+    const { POST } = await import("../../src/app/api/oauth/agy/import/route.js");
+
+    const res = await POST({
+      json: async () => ({
+        accessToken: "expired-access-token",
+        refreshToken: "valid-refresh-token",
+      }),
+    });
+    const data = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(mockCreateConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accessToken: "refreshed-access-token",
+        refreshToken: "refreshed-refresh-token",
+        email: "recovered@gmail.com",
+        projectId: "proj-recovered",
+      })
+    );
+  });
+
+  it("automatically refreshes token before validation if expiresAt is in the past", async () => {
+    // 1. token refresh succeeds
+    // 2. userinfo succeeds with refreshed token
+    // 3. loadCodeAssist succeeds
+    global.fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          access_token: "preemptively-refreshed-access",
+          expires_in: 3600,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ email: "preemptive@gmail.com" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          cloudaicompanionProject: { id: "proj-preemptive" },
+        }),
+      });
+
+    mockCreateConnection.mockResolvedValueOnce({
+      id: "conn-preemptive",
+      provider: "agy",
+      email: "preemptive@gmail.com",
+    });
+
+    const { POST } = await import("../../src/app/api/oauth/agy/import/route.js");
+
+    const res = await POST({
+      json: async () => ({
+        accessToken: "stale-access",
+        refreshToken: "valid-refresh",
+        expiresAt: new Date(Date.now() - 3600000).toISOString(), // 1 hour in the past
+      }),
+    });
+    const data = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(mockCreateConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accessToken: "preemptively-refreshed-access",
+        refreshToken: "valid-refresh",
+        email: "preemptive@gmail.com",
+      })
+    );
+  });
+
   it("rejects request when neither access token nor refresh token is provided", async () => {
     const { POST } = await import("../../src/app/api/oauth/agy/import/route.js");
 
