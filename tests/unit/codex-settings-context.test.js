@@ -7,8 +7,12 @@ describe("Codex GPT-5.6 managed context settings", () => {
   it("matches only supported exact model IDs and effort variants", () => {
     expect(isCodexGpt56("grok-main/gpt-5.6-sol-medium")).toBe(true);
     expect(isCodexGpt56("gpt-5.6-terra-review-xhigh")).toBe(true);
+    expect(isCodexGpt56("cx/gpt-6-sol-high")).toBe(true);
+    expect(isCodexGpt56("gpt-6-luna-max")).toBe(true);
     expect(isCodexGpt56("prefix-gpt-5.6-sol-medium-extra")).toBe(false);
     expect(isCodexGpt56("gpt-5.6-solar")).toBe(false);
+    expect(isCodexGpt56("gpt-6-astra")).toBe(false);
+    expect(isCodexGpt56("gpt-6-solar")).toBe(false);
   });
 
   it("does not delete user context settings for another model", () => {

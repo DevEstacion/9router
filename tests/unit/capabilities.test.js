@@ -89,10 +89,16 @@ describe("getCapabilitiesForModel", () => {
         "gpt-5.6-sol-review-high",
         "gpt-5.6-terra-xhigh",
         "gpt-5.6-luna-low",
+        "gpt-6-sol",
+        "gpt-6-sol-high",
+        "gpt-6-luna",
+        "gpt-6-luna-max",
       ]) {
         expect(getCapabilitiesForModel(provider, model).contextWindow).toBe(872000);
       }
     }
+    expect(getCapabilitiesForModel("codex", "gpt-6-astra").contextWindow).toBe(272000);
+    expect(getCapabilitiesForModel("cx", "gpt-6-astra").contextWindow).toBe(272000);
   });
 
   it("reports Codex GPT 6.0 Astra as a vision and thinking capable model", () => {

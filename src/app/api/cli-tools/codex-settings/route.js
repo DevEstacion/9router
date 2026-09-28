@@ -83,7 +83,7 @@ const has9RouterConfig = (config) => {
   return config.includes("model_provider = \"9router\"") || config.includes("[model_providers.9router]");
 };
 
-const isCodexGpt56 = (model) => /^(?:[^/]+\/)?gpt-5\.6-(?:sol|terra|luna)(?:-(?:review|none|minimal|low|medium|high|xhigh|max))*$/.test(model || "");
+const isCodexGpt56 = (model) => /^(?:[^/]+\/)?(?:gpt-5\.6-(?:sol|terra|luna)|gpt-6-(?:sol|luna))(?:-(?:review|none|minimal|low|medium|high|xhigh|max))*$/.test(model || "");
 
 const applyCodexGpt56Window = (parsed, model) => {
   if (isCodexGpt56(model)) {
