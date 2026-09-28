@@ -10,6 +10,8 @@ import {
   CODEX_GPT_56_CONTEXT_WINDOW,
 } from "open-sse/providers/capabilities.js";
 
+export const dynamic = "force-dynamic";
+
 const execAsync = promisify(exec);
 
 const getCodexDir = () => path.join(os.homedir(), ".codex");
