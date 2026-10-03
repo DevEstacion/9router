@@ -75,7 +75,6 @@ export default function GrokBuildToolCard({
   tailscaleUrl,
 }) {
   const { getCaps } = useModelCaps();
-  const getContextWindow = (model) => getCaps(model)?.contextWindow || null;
   const initialModel = initialStatus?.settings?.model?.model || "";
   const initialSubagents = Object.fromEntries(
     SUBAGENT_TYPES
@@ -97,6 +96,10 @@ export default function GrokBuildToolCard({
   const hasFetchedStatus = useRef(Boolean(initialStatus));
 
   const configuredModel = grokStatus?.settings?.model;
+  const getContextWindow = (model) =>
+    model === configuredModel?.model && configuredModel?.context_window
+      ? configuredModel.context_window
+      : getCaps(model)?.contextWindow || null;
   const currentBaseUrl = configuredModel?.base_url || "";
   const configStatus = !grokStatus?.installed
     ? null
