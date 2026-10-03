@@ -6,6 +6,7 @@ vi.mock("../../open-sse/utils/proxyFetch.js", () => ({
 
 import { proxyAwareFetch } from "../../open-sse/utils/proxyFetch.js";
 import { getUsageForProvider } from "../../open-sse/services/usage.js";
+import { parseQuotaData } from "@/app/(dashboard)/dashboard/usage/components/ProviderLimits/utils.js";
 import { getAgyCliUserAgent, AGY_CLI_VERSION, AGY_CLI_CL } from "../../open-sse/providers/shared.js";
 import { PROVIDERS } from "../../open-sse/config/providers.js";
 import { AGY_CONFIG } from "../../src/lib/oauth/constants/oauth.js";
@@ -93,6 +94,35 @@ describe("Antigravity CLI (agy) Traffic & Request Signature", () => {
       expect.objectContaining({ body: JSON.stringify({ project: "stored-project" }) }),
       null
     );
+  });
+
+  it("renders Agy grouped quota summary as four session and weekly bars", async () => {
+    proxyAwareFetch.mockResolvedValueOnce(new Response(JSON.stringify({
+      groups: [
+        { displayName: "Gemini Models", buckets: [
+          { window: "weekly", remainingFraction: 0.75, resetTime: "2026-10-10T08:38:23Z" },
+          { window: "5h", remainingFraction: 0.5, resetTime: "2026-10-04T00:02:37Z" },
+        ] },
+        { displayName: "Claude and GPT models", buckets: [
+          { window: "weekly", remainingFraction: 1, resetTime: "2026-10-10T19:09:44Z" },
+          { window: "5h", remainingFraction: 0, resetTime: "2026-10-04T00:09:44Z" },
+        ] },
+      ],
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    const usage = await getUsageForProvider({
+      provider: "agy", accessToken: "ya29.test", providerSpecificData: { tierId: "free-tier" },
+    });
+    const rows = parseQuotaData("agy", usage);
+    expect(rows).toHaveLength(4);
+    expect(rows.every((row) => row.percentageOnly === true)).toBe(true);
+    expect(Object.fromEntries(rows.map((row) => [row.name, row.remainingPercentage]))).toEqual({
+      "Gemini (5h)": 50,
+      "Gemini (Weekly)": 75,
+      "Claude & GPT (5h)": 0,
+      "Claude & GPT (Weekly)": 100,
+    });
+    expect(rows.find((row) => row.name === "Gemini (5h)").resetAt).toBe("2026-10-04T00:02:37.000Z");
   });
 
   it("uses the Agy project fallback instead of a random project ID", () => {

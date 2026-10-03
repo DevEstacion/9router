@@ -5,7 +5,7 @@
 import { CLIENT_METADATA } from "../../config/appConstants.js";
 import { ANTIGRAVITY_IDE_USER_AGENT, ANTIGRAVITY_IDE_VERSION, ANTIGRAVITY_OAUTH_CLIENT, ANTIGRAVITY_IDE_BASE_URL, getAgyCliUserAgent } from "../../providers/shared.js";
 import { U, parseResetTime, normalizeCloudCodeProjectId, fetchWithTimeout } from "./shared.js";
-import { fetchAntigravityWeeklyQuota } from "./antigravity-weekly.js";
+import { fetchAntigravityWeeklyQuota, parseWeeklyQuotaSummary } from "./antigravity-weekly.js";
 
 // Antigravity API config (from Quotio) — urls from registry, oauth client + dynamic UA kept here
 const ANTIGRAVITY_CONFIG = {
@@ -332,7 +332,9 @@ export async function getAgyUsage(accessToken, providerSpecificData, proxyOption
     }
 
     const data = await response.json();
-    const quotas = {};
+    const quotas = Object.fromEntries(
+      Object.entries(parseWeeklyQuotaSummary(data)).map(([name, quota]) => [name, { ...quota, percentageOnly: true }])
+    );
 
     const importantModels = [
       "gemini-3.8-flash-high",

@@ -374,6 +374,7 @@ export function parseQuotaData(provider, data) {
         break;
 
       case "antigravity":
+      case "agy":
         if (data.quotas) {
           const entries = Object.entries(data.quotas);
           const weeklyKeys = new Set(["gemini_weekly", "claude_gpt_weekly"]);
@@ -401,6 +402,7 @@ export function parseQuotaData(provider, data) {
                 total: quota.total || 0,
                 resetAt: quota.resetAt || null,
                 remainingPercentage: quota.remainingPercentage,
+                percentageOnly: provider.toLowerCase() === "agy" && quota.percentageOnly === true,
               });
             });
           } else if (geminiModels.length > 0) {
@@ -433,6 +435,7 @@ export function parseQuotaData(provider, data) {
                 total: quota.total || 0,
                 resetAt: quota.resetAt || null,
                 remainingPercentage: quota.remainingPercentage,
+                percentageOnly: provider.toLowerCase() === "agy" && quota.percentageOnly === true,
               });
             });
           }
@@ -447,6 +450,7 @@ export function parseQuotaData(provider, data) {
                 total: quota.total || 0,
                 resetAt: quota.resetAt || null,
                 remainingPercentage: quota.remainingPercentage,
+                percentageOnly: provider.toLowerCase() === "agy" && quota.percentageOnly === true,
               });
             });
           } else if (claudeModels.length > 0) {
@@ -478,6 +482,7 @@ export function parseQuotaData(provider, data) {
                 total: quota.total || 0,
                 resetAt: quota.resetAt || null,
                 remainingPercentage: quota.remainingPercentage,
+                percentageOnly: provider.toLowerCase() === "agy" && quota.percentageOnly === true,
               });
             });
           }
@@ -491,6 +496,7 @@ export function parseQuotaData(provider, data) {
               total: quota.total || 0,
               resetAt: quota.resetAt || null,
               remainingPercentage: quota.remainingPercentage,
+                percentageOnly: provider.toLowerCase() === "agy" && quota.percentageOnly === true,
             });
           });
 
@@ -508,6 +514,7 @@ export function parseQuotaData(provider, data) {
                 total: quota.total || 0,
                 resetAt: quota.resetAt || null,
                 remainingPercentage: quota.remainingPercentage,
+                percentageOnly: provider.toLowerCase() === "agy" && quota.percentageOnly === true,
               });
             });
           }
