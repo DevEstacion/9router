@@ -45,8 +45,8 @@ describe("xAI Grok hyphenated effort aliases", () => {
     expect(executor.buildUrl(model, false)).toBe("https://api.x.ai/v1/chat/completions");
   });
 
-  it.each(["low", "medium", "high", "xhigh"])("passes client %s effort through unsuffixed xAI Grok 4.6", (effort) => {
-    const upstreamModel = getModelUpstreamId("xai", "grok-4.6");
+  it.each(["low", "medium", "high", "xhigh"])("passes client %s effort through unsuffixed xAI Grok 4.7", (effort) => {
+    const upstreamModel = getModelUpstreamId("xai", "grok-4.7");
     const body = translateRequest("openai", "openai", upstreamModel, {
       messages: [{ role: "user", content: "hello" }],
       reasoning_effort: effort,

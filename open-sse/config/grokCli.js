@@ -9,5 +9,5 @@ export const GROK_CLI_PAGER_USER_AGENT = `grok-pager/${GROK_CLI_VERSION} grok-sh
 
 export function supportsGrokCliReasoningEffort(model) {
   // Only named Grok models with known effort support receive reasoning.effort.
-  return /^grok-4\.(?:5|6)(?:$|-)/.test(String(model || ""));
+  return /^grok-4\.(?:5|6|7)(?:$|-)/.test(String(model || ""));
 }

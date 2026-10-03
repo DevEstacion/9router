@@ -332,9 +332,20 @@ describe("GrokCliExecutor", () => {
     expect(out.model).toBe("grok-4.6");
   });
 
+  it.each(["low", "medium", "high", "xhigh"])("passes explicit %s effort to Grok 4.7", (effort) => {
+    const out = executor.transformRequest("grok-4.7", {
+      model: "grok-4.7",
+      input: "hi",
+      reasoning_effort: effort,
+    }, true, { connectionId: `grok-47-${effort}` });
+    expect(out.reasoning.effort).toBe(effort);
+    expect(out.model).toBe("grok-4.7");
+  });
+
   it("omits reasoning effort for models that reject it", () => {
     expect(supportsGrokCliReasoningEffort("grok-4.5")).toBe(true);
     expect(supportsGrokCliReasoningEffort("grok-4.6")).toBe(true);
+    expect(supportsGrokCliReasoningEffort("grok-4.7")).toBe(true);
     expect(supportsGrokCliReasoningEffort("grok-build")).toBe(false);
     expect(supportsGrokCliReasoningEffort("grok-composer-2.5-fast")).toBe(false);
 

@@ -4,7 +4,7 @@ import { getModelUpstreamId } from "../../open-sse/config/providerModels.js";
 import { translateRequest } from "../../open-sse/translator/index.js";
 import { CodexExecutor } from "../../open-sse/executors/codex.js";
 
-const models = ["cx/gpt-6-sol", "gcli/grok-4.6", "xai/grok-4.6", "agy/gemini-3.8-flash-high"];
+const models = ["cx/gpt-6-astra[1m]", "gcli/grok-4.7", "xai/grok-4.7", "agy/gemini-3.8-flash-high"];
 const log = { info() {}, warn() {} };
 
 describe("request-controlled effort across grok-main fallbacks", () => {
@@ -26,7 +26,7 @@ describe("request-controlled effort across grok-main fallbacks", () => {
       log,
       handleSingleModel: async (request, model) => {
         attempted.push([model, request.reasoning_effort]);
-        return model === "xai/grok-4.6"
+        return model === "xai/grok-4.7"
           ? new Response("ok")
           : new Response(JSON.stringify({ error: { message: "upstream unavailable" } }), { status: 503 });
       },
@@ -41,7 +41,7 @@ describe("request-controlled effort across grok-main fallbacks", () => {
     });
     expect(codex.reasoning.effort).toBe(effort);
 
-    const xai = translateRequest("openai", "openai", getModelUpstreamId("xai", "grok-4.6"), body, false, {}, "xai");
+    const xai = translateRequest("openai", "openai", getModelUpstreamId("xai", "grok-4.7"), body, false, {}, "xai");
     expect(xai.reasoning_effort).toBe(effort);
   });
 });
