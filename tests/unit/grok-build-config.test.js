@@ -76,6 +76,15 @@ describe("grokBuildConfig", () => {
     expect(result).toContain("url = \"https://example.com/mcp\"");
   });
 
+  it("keeps the main model's effort menu when Apply rewrites its section", () => {
+    const withEffortMenu = `${BASE_CONFIG}\n[model.9router]\nmodel = "grok-main"\nreasoning_efforts = [\n  { value = "low", label = "Low" },\n  { value = "high", label = "High", default = true },\n]\n`;
+    const result = applyGrokBuildConfig(withEffortMenu, APPLY_INPUT);
+    const reapplied = applyGrokBuildConfig(result, APPLY_INPUT);
+    expect(reapplied).toContain('reasoning_efforts = [\n  { value = "low", label = "Low" },\n  { value = "high", label = "High", default = true },\n]');
+    expect(reapplied.match(/reasoning_efforts\s*=/g)).toHaveLength(1);
+    expect(reapplied).toContain('model = "cx/gpt-5.6-sol"');
+  });
+
   it("is idempotent and updates owned slots without duplicate sections", () => {
     let result = applyGrokBuildConfig(BASE_CONFIG, APPLY_INPUT);
     result = applyGrokBuildConfig(result, {

@@ -109,7 +109,12 @@ function buildModelSection({ slot, model, baseUrl, apiKey, contextWindow, name }
 
 function upsertModelSection(toml, config) {
   const regexp = sectionRegExp(`model.${config.slot}`);
-  const section = buildModelSection(config);
+  let section = buildModelSection(config);
+  if (config.slot === GROK_MAIN_MODEL_SLOT) {
+    const existing = toml.match(regexp)?.[1] || "";
+    const effortMenu = existing.match(/^reasoning_efforts\s*=\s*\[[\s\S]*?^\]/m)?.[0];
+    if (effortMenu) section += `${effortMenu}\n`;
+  }
   if (regexp.test(toml)) return toml.replace(regexp, section);
   const prefix = toml.length > 0 && !toml.endsWith("\n") ? `${toml}\n` : toml;
   return `${prefix}\n${section}`;
